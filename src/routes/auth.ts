@@ -11,7 +11,7 @@ const router = express.Router();
 // Register new user
 router.post('/register', async (req: any, res: any) => {
     try {
-        const { username, email, password } = req.body;
+        const { fullname, username, email, password, bio } = req.body;
 
         const existingUser = await User.findOne({
             where: {
@@ -25,8 +25,10 @@ router.post('/register', async (req: any, res: any) => {
 
         const user = await User.create({
             id: uuidv4(),
+            fullname,
             username,
             email,
+            bio,
             password // Password will be hashed by the beforeCreate hook
         });
 
@@ -44,14 +46,14 @@ router.post('/register', async (req: any, res: any) => {
             token,
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     } catch (error) {
-        // Log the detailed error
         console.error('Registration error:', error);
-        // Check if it's a Sequelize validation error
         if (error instanceof Error && error.name === 'SequelizeValidationError') {
             return res.status(400).json({ message: 'Validation failed', errors: (error as any).errors });
         }
@@ -92,13 +94,14 @@ router.post('/login', async (req: any, res: any) => {
             maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
         });
 
-        // Return token in response body as well
         return res.json({
-            token, // Include token in response
+            token,
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     } catch (error) {
@@ -107,7 +110,7 @@ router.post('/login', async (req: any, res: any) => {
     }
 });
 
-// Logout (no model interaction)
+// Logout
 router.post('/logout', (req: any, res: any) => {
     res.clearCookie('token');
     return res.json({ message: 'Logged out successfully' });
@@ -116,7 +119,6 @@ router.post('/logout', (req: any, res: any) => {
 // Get current user
 router.get('/me', auth, async (req: any, res: any) => {
     try {
-        // req.user is already the fetched user instance from the auth middleware
         const user = req.user;
 
         if (!user) {
@@ -126,8 +128,10 @@ router.get('/me', auth, async (req: any, res: any) => {
         return res.json({
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     } catch (error) {
