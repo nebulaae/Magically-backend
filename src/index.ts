@@ -1,12 +1,54 @@
+import cors from 'cors';
+import path from 'path';
 import express from 'express';
+import cookieParser from 'cookie-parser';
+
+import db from './config/database';
+
+// Import routes
+import authRoutes from './routes/auth';
+
+// Initialize express app
 const app = express();
+const PORT = process.env.PORT || 3002;
 
-app.get('/', (req, res) => {
-  const name = process.env.NAME || 'World';
-  res.send(`Hello ${name}!`);
+// Middleware
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Serve static files
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Routes
+app.use('/api/auth', authRoutes);
+
+// Health check route
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-const port = parseInt(process.env.PORT || '3000');
-app.listen(port, () => {
-  console.log(`listening on port ${port}`);
-});
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Sync database models
+    await db.sync();
+    console.log('Database synchronized');
+
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+  }
+};
+
+startServer();
