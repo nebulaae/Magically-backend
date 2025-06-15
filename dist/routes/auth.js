@@ -22,7 +22,7 @@ const router = express_1.default.Router();
 // Register new user
 router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { username, email, password } = req.body;
+        const { fullname, username, email, password, bio } = req.body;
         const existingUser = yield User_1.User.findOne({
             where: {
                 [sequelize_1.Op.or]: [{ username }, { email }]
@@ -33,8 +33,10 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         const user = yield User_1.User.create({
             id: (0, uuid_1.v4)(),
+            fullname,
             username,
             email,
+            bio,
             password // Password will be hashed by the beforeCreate hook
         });
         // Generate JWT token
@@ -49,15 +51,15 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             token,
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     }
     catch (error) {
-        // Log the detailed error
         console.error('Registration error:', error);
-        // Check if it's a Sequelize validation error
         if (error instanceof Error && error.name === 'SequelizeValidationError') {
             return res.status(400).json({ message: 'Validation failed', errors: error.errors });
         }
@@ -91,13 +93,14 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             secure: process.env.NODE_ENV === 'production',
             maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
         });
-        // Return token in response body as well
         return res.json({
-            token, // Include token in response
+            token,
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     }
@@ -106,7 +109,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         return res.status(500).json({ message: 'Server error during login' });
     }
 }));
-// Logout (no model interaction)
+// Logout
 router.post('/logout', (req, res) => {
     res.clearCookie('token');
     return res.json({ message: 'Logged out successfully' });
@@ -114,7 +117,6 @@ router.post('/logout', (req, res) => {
 // Get current user
 router.get('/me', auth_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // req.user is already the fetched user instance from the auth middleware
         const user = req.user;
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -122,8 +124,10 @@ router.get('/me', auth_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, f
         return res.json({
             user: {
                 id: user.id,
+                fullname: user.fullname,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                bio: user.bio
             }
         });
     }

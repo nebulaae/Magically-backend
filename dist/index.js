@@ -21,7 +21,7 @@ const database_1 = __importDefault(require("./config/database"));
 const auth_1 = __importDefault(require("./routes/auth"));
 // Initialize express app
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 5000;
 // Middleware
 app.use((0, cors_1.default)({
     origin: "*",

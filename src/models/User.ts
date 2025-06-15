@@ -1,5 +1,5 @@
-import db from '../config/database';
 import bcrypt from 'bcrypt';
+import db from '../config/database';
 import { DataTypes, Model } from 'sequelize';
 
 // --- User Model ---
