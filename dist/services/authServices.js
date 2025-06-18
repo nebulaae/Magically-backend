@@ -4,8 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyToken = exports.generateToken = void 0;
+const dotenv_1 = __importDefault(require("dotenv"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
+dotenv_1.default.config();
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '365d';
 const generateToken = (userId) => {
     return jsonwebtoken_1.default.sign({ id: userId }, JWT_SECRET, {

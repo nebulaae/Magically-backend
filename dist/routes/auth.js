@@ -1,140 +1,46 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
 };
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const sequelize_1 = require("sequelize");
-const uuid_1 = require("uuid");
-const User_1 = require("../models/User");
 const auth_1 = require("../middleware/auth");
-const authServices_1 = require("../services/authServices");
+const authController = __importStar(require("../controllers/authController"));
 const router = express_1.default.Router();
+// Helper to wrap async route handlers
+const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+};
 // Register new user
-router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { fullname, username, email, password, bio } = req.body;
-        const existingUser = yield User_1.User.findOne({
-            where: {
-                [sequelize_1.Op.or]: [{ username }, { email }]
-            }
-        });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username or email already exists' });
-        }
-        const user = yield User_1.User.create({
-            id: (0, uuid_1.v4)(),
-            fullname,
-            username,
-            email,
-            bio,
-            password // Password will be hashed by the beforeCreate hook
-        });
-        // Generate JWT token
-        const token = (0, authServices_1.generateToken)(user.id);
-        // Set cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-        });
-        return res.status(201).json({
-            token,
-            user: {
-                id: user.id,
-                fullname: user.fullname,
-                username: user.username,
-                email: user.email,
-                bio: user.bio
-            }
-        });
-    }
-    catch (error) {
-        console.error('Registration error:', error);
-        if (error instanceof Error && error.name === 'SequelizeValidationError') {
-            return res.status(400).json({ message: 'Validation failed', errors: error.errors });
-        }
-        return res.status(500).json({ message: 'Server error during registration' });
-    }
-}));
-// --- Login Route ---
-router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { usernameOrEmail, password } = req.body;
-        const user = yield User_1.User.findOne({
-            where: {
-                [sequelize_1.Op.or]: [
-                    { username: usernameOrEmail },
-                    { email: usernameOrEmail },
-                ],
-            },
-        });
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-        const isMatch = yield user.comparePassword(password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-        // Generate JWT token
-        const token = (0, authServices_1.generateToken)(user.id);
-        // Set cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-        });
-        return res.json({
-            token,
-            user: {
-                id: user.id,
-                fullname: user.fullname,
-                username: user.username,
-                email: user.email,
-                bio: user.bio
-            }
-        });
-    }
-    catch (error) {
-        console.error('Login error:', error);
-        return res.status(500).json({ message: 'Server error during login' });
-    }
-}));
-// Logout
-router.post('/logout', (req, res) => {
-    res.clearCookie('token');
-    return res.json({ message: 'Logged out successfully' });
-});
-// Get current user
-router.get('/me', auth_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const user = req.user;
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-        return res.json({
-            user: {
-                id: user.id,
-                fullname: user.fullname,
-                username: user.username,
-                email: user.email,
-                bio: user.bio
-            }
-        });
-    }
-    catch (error) {
-        console.error('Get current user error:', error);
-        return res.status(500).json({ message: 'Server error' });
-    }
-}));
+router.post('/register', asyncHandler(authController.register));
+// Login user
+router.post('/login', asyncHandler(authController.login));
+// Logout user
+router.post('/logout', asyncHandler(authController.logout));
+// Get current authenticated user
+router.get('/me', auth_1.auth, asyncHandler(authController.getMe));
 exports.default = router;
 //# sourceMappingURL=auth.js.map

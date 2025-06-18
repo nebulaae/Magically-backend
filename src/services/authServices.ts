@@ -1,6 +1,9 @@
+import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '365d';
 
 export const generateToken = (userId: string): string => {

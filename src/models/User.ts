@@ -1,8 +1,17 @@
 import bcrypt from 'bcrypt';
 import db from '../config/database';
-import { DataTypes, Model } from 'sequelize';
 
-// --- User Model ---
+import type { Publication } from './Publication';
+import {
+    Model,
+    DataTypes,
+    HasManyGetAssociationsMixin,
+    BelongsToManyAddAssociationMixin,
+    BelongsToManyRemoveAssociationMixin,
+    BelongsToManyGetAssociationsMixin
+} from 'sequelize';
+
+// --- User Model Attributes ---
 export interface UserAttributes {
     id: string;
     fullname: string;
@@ -10,10 +19,13 @@ export interface UserAttributes {
     email: string;
     bio?: string;
     password: string;
+    avatar?: string;
+    interests?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }
 
+// --- User Model Class ---
 export class User extends Model<UserAttributes> implements UserAttributes {
     public id!: string;
     public fullname!: string;
@@ -21,14 +33,28 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public email!: string;
     public bio?: string;
     public password!: string;
+    public avatar?: string;
+    public interests?: string[];
+
+    // Timestamps
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 
+    // Instance method to compare passwords
     public async comparePassword(candidatePassword: string): Promise<boolean> {
         return bcrypt.compare(candidatePassword, this.password);
     }
+
+    // --- Sequelize Mixins for Associations ---
+    // These type definitions make TypeScript aware of the dynamic methods added by Sequelize.
+    public getPublications!: HasManyGetAssociationsMixin<Publication>;
+    public getFollowing!: BelongsToManyGetAssociationsMixin<User>;
+    public addFollowing!: BelongsToManyAddAssociationMixin<User, string>;
+    public removeFollowing!: BelongsToManyRemoveAssociationMixin<User, string>;
+    public getFollowers!: BelongsToManyGetAssociationsMixin<User>;
 }
 
+// --- Initialize User Model ---
 User.init(
     {
         id: {
@@ -58,8 +84,17 @@ User.init(
             allowNull: true,
         },
         password: {
-            type: DataTypes.STRING(60), // bcrypt hash length
+            type: DataTypes.STRING(60),
             allowNull: false,
+        },
+        avatar: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        interests: {
+            type: DataTypes.ARRAY(DataTypes.STRING),
+            allowNull: true,
+            defaultValue: [],
         },
     },
     {
@@ -68,8 +103,10 @@ User.init(
         tableName: 'users',
         hooks: {
             beforeCreate: async (user: User) => {
-                const salt = await bcrypt.genSalt(10);
-                user.password = await bcrypt.hash(user.password, salt);
+                if (user.password) {
+                    const salt = await bcrypt.genSalt(10);
+                    user.password = await bcrypt.hash(user.password, salt);
+                }
             },
             beforeUpdate: async (user: User) => {
                 if (user.changed('password')) {
@@ -80,6 +117,3 @@ User.init(
         },
     }
 );
-
-export const user = { User };
-export { db };
