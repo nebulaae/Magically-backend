@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.auth = void 0;
 const User_1 = require("../models/User");
-const authServices_1 = require("../services/authServices");
+const authService_1 = require("../services/authService");
 const auth = async (req, res, next) => {
     var _a;
     try {
@@ -11,7 +11,7 @@ const auth = async (req, res, next) => {
             res.status(401).json({ message: 'Authentication required' });
             return;
         }
-        const decoded = (0, authServices_1.verifyToken)(token);
+        const decoded = (0, authService_1.verifyToken)(token);
         if (!decoded) {
             res.status(401).json({ message: 'Invalid token' });
             return;

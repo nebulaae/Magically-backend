@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { User } from '../models/User';
-import { generateToken } from '../services/authServices';
+import { generateToken } from '../services/authService';
 
 // --- Register New User ---
 export const register = async (req: Request, res: Response) => {

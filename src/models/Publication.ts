@@ -1,5 +1,12 @@
-import db from '../config/database';          
-import { DataTypes, Model } from 'sequelize';
+import db from '../config/database';
+import type { User } from './User';
+import {
+    Model,
+    DataTypes,
+    BelongsToManyAddAssociationMixin,
+    BelongsToManyGetAssociationsMixin,
+    BelongsToManyRemoveAssociationMixin,
+} from 'sequelize';
 
 // --- Publication Model Attributes ---
 export interface PublicationAttributes {
@@ -7,6 +14,7 @@ export interface PublicationAttributes {
     userId: string;
     content: string;
     imageUrl?: string;
+    category?: string;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -17,8 +25,14 @@ export class Publication extends Model<PublicationAttributes> implements Publica
     public userId!: string;
     public content!: string;
     public imageUrl?: string;
+    public category?: string;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
+
+    // Associations
+    public getLikers!: BelongsToManyGetAssociationsMixin<User>;
+    public addLiker!: BelongsToManyAddAssociationMixin<User, string>;
+    public removeLiker!: BelongsToManyRemoveAssociationMixin<User, string>;
 }
 
 // --- Initialize Publication Model ---
@@ -45,6 +59,10 @@ Publication.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
+        category: { // New: Category field
+            type: DataTypes.STRING,
+            allowNull: true, // Can be null if not classified or no relevant category
+        }
     },
     {
         sequelize: db,

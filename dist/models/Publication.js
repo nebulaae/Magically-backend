@@ -33,6 +33,10 @@ Publication.init({
         type: sequelize_1.DataTypes.STRING,
         allowNull: true,
     },
+    category: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true, // Can be null if not classified or no relevant category
+    }
 }, {
     sequelize: database_1.default,
     modelName: 'Publication',

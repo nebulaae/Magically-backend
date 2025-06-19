@@ -14,7 +14,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMe = exports.logout = exports.login = exports.register = void 0;
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
-const authServices_1 = require("../services/authServices");
+const authService_1 = require("../services/authService");
 // --- Register New User ---
 const register = async (req, res) => {
     try {
@@ -35,7 +35,7 @@ const register = async (req, res) => {
             password // Password will be hashed by the beforeCreate hook
         });
         // Generate JWT token
-        const token = (0, authServices_1.generateToken)(user.id);
+        const token = (0, authService_1.generateToken)(user.id);
         // Set cookie
         res.cookie('token', token, {
             httpOnly: true,
@@ -78,7 +78,7 @@ const login = async (req, res) => {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
         // Generate JWT token
-        const token = (0, authServices_1.generateToken)(user.id);
+        const token = (0, authService_1.generateToken)(user.id);
         // Set cookie
         res.cookie('token', token, {
             httpOnly: true,

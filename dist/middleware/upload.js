@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.uploadAvatar = void 0;
+exports.uploadPublicationImage = exports.uploadAvatar = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const multer_1 = __importDefault(require("multer"));
@@ -43,4 +43,32 @@ exports.uploadAvatar = (0, multer_1.default)({
     limits: { fileSize: 2 * 1024 * 1024 }, // Limit file size to 2MB
     fileFilter: fileFilter
 }).single('avatar'); // 'avatar' is the name of the form field
+// Upload publication image
+exports.uploadPublicationImage = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (req, file, cb) => {
+            const publicationDir = path_1.default.join(__dirname, '../../public/publications');
+            if (!fs_1.default.existsSync(publicationDir)) {
+                fs_1.default.mkdirSync(publicationDir, { recursive: true });
+            }
+            cb(null, publicationDir);
+        },
+        filename: (req, file, cb) => {
+            const userId = req.user.id;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const extension = path_1.default.extname(file.originalname);
+            cb(null, `${userId}-${uniqueSuffix}${extension}`);
+        }
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif/;
+        const mimetype = allowedTypes.test(file.mimetype);
+        const extname = allowedTypes.test(path_1.default.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('Error: File upload only supports image filetypes - ' + allowedTypes));
+    }
+}).single('publicationImage'); // 'publicationImage' is the name of the form field
 //# sourceMappingURL=upload.js.map

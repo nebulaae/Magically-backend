@@ -44,3 +44,28 @@ export const uploadAvatar = multer({
     limits: { fileSize: 2 * 1024 * 1024 }, // Limit file size to 2MB
     fileFilter: fileFilter
 }).single('avatar'); // 'avatar' is the name of the form field
+
+// Upload publication image
+export const uploadPublicationImage = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const publicationDir = path.join(__dirname, '../../public/publications');
+            if (!fs.existsSync(publicationDir)) { fs.mkdirSync(publicationDir, { recursive: true }); }
+            cb(null, publicationDir);
+        },
+        filename: (req: Request, file, cb) => {
+            const userId = req.user.id;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const extension = path.extname(file.originalname);
+            cb(null, `${userId}-${uniqueSuffix}${extension}`);
+        }
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
+    fileFilter: (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+        const allowedTypes = /jpeg|jpg|png|gif/;
+        const mimetype = allowedTypes.test(file.mimetype);
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) { return cb(null, true); }
+        cb(new Error('Error: File upload only supports image filetypes - ' + allowedTypes));
+    }
+}).single('publicationImage'); // 'publicationImage' is the name of the form field

@@ -1,5 +1,5 @@
 import { User } from '../models/User';
-import { verifyToken } from '../services/authServices';
+import { verifyToken } from '../services/authService';
 import { Request, Response, NextFunction } from 'express';
 
 // Extending Express Request type to include user

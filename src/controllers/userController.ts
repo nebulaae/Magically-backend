@@ -4,41 +4,75 @@ import path from 'path';
 import { Op } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
-import { Publication } from '../models/Publication';
+import { Subscription } from '../models/Subscription'; // Import Subscription model
+
+// --- Helper function for AI Classification (Placeholder) ---
+// In a real application, this would involve calling an external ML service
+// or using a library like @tensorflow/tfjs-node for inference.
+async function classifyContent(content: string, imageUrl?: string): Promise<string> {
+    // Placeholder for AI classification
+    // For demonstration, let's just return a static category or infer based on keywords.
+    if (imageUrl) {
+        // Imagine calling an image classification model here
+        // Example: if image recognition determines it's a "cat" or "food"
+        return "Image_Content"; // Or more specific categories like "Nature", "Animals", "Art"
+    } else {
+        // Imagine calling a text classification model here
+        if (content.toLowerCase().includes('news') || content.toLowerCase().includes('current events')) return 'News';
+        if (content.toLowerCase().includes('tech') || content.toLowerCase().includes('software')) return 'Technology';
+        if (content.toLowerCase().includes('food') || content.toLowerCase().includes('recipe')) return 'Food';
+        if (content.toLowerCase().includes('travel') || content.toLowerCase().includes('adventure')) return 'Travel';
+        return 'General';
+    }
+}
 
 // --- Get User Profile ---
 export const getProfile = async (req: Request, res: Response) => {
     try {
         const { username } = req.params;
+        const currentUser = req.user; // Authenticated user from middleware
+
         const user = await User.findOne({
             where: { username },
             attributes: { exclude: ['password', 'email'] }, // Don't expose sensitive info
-            include: [
-                {
-                    model: Publication,
-                    as: 'publications',
-                    attributes: ['id', 'content', 'imageUrl', 'createdAt']
-                },
-                {
-                    model: User,
-                    as: 'Followers',
-                    attributes: ['id', 'username', 'avatar'],
-                    through: { attributes: [] } // Don't include the join table attributes
-                },
-                {
-                    model: User,
-                    as: 'Following',
-                    attributes: ['id', 'username', 'avatar'],
-                    through: { attributes: [] }
-                }
-            ]
+            // Do NOT include associations here if you only need counts
         });
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(user);
+        // Get counts directly
+        const publicationsCount = (await user.getPublications()).length;
+        const followersCount = (await user.getFollowers()).length;
+        const followingCount = (await user.getFollowing()).length;
+        
+        // Check if the current authenticated user is following this profile
+        let isFollowing = false;
+        if (currentUser && currentUser.id !== user.id) {
+            const subscription = await Subscription.findOne({
+                where: {
+                    followerId: currentUser.id,
+                    followingId: user.id
+                }
+            });
+            isFollowing = !!subscription; // True if subscription exists, false otherwise
+        } else if (currentUser && currentUser.id === user.id) {
+            // If it's the current user's own profile, they are "following" themselves in a conceptual sense
+            // or you can set this to false depending on your UI/logic needs.
+            // For simplicity, let's keep it true if it's their own profile.
+            isFollowing = true;
+        }
+
+        const userResponse = user.get({ plain: true });
+
+        res.json({
+            ...userResponse,
+            publicationsCount,
+            followersCount,
+            followingCount,
+            isFollowing // New: Indicate if current user is following this profile
+        });
     } catch (error) {
         console.error('Get profile error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -51,32 +85,26 @@ export const getMe = async (req: Request, res: Response) => {
         const userId = req.user.id;
         const user = await User.findByPk(userId, {
             attributes: { exclude: ['password', 'email'] },
-            include: [
-                {
-                    model: Publication,
-                    as: 'publications',
-                    attributes: ['id', 'content', 'imageUrl', 'createdAt']
-                },
-                {
-                    model: User,
-                    as: 'Followers',
-                    attributes: ['id', 'username', 'avatar'],
-                    through: { attributes: [] }
-                },
-                {
-                    model: User,
-                    as: 'Following',
-                    attributes: ['id', 'username', 'avatar'],
-                    through: { attributes: [] }
-                }
-            ]
+            // Do NOT include associations here if you only need counts
         });
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(user);
+        // Get counts directly
+        const publicationsCount = (await user.getPublications()).length;
+        const followersCount = (await user.getFollowers()).length;
+        const followingCount = (await user.getFollowing()).length;
+
+        const userResponse = user.get({ plain: true });
+
+        res.json({
+            ...userResponse,
+            publicationsCount,
+            followersCount,
+            followingCount,
+        });
     } catch (error) {
         console.error('Get current user profile error:', error);
         res.status(500).json({ message: 'Server error' });

@@ -52,6 +52,10 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public addFollowing!: BelongsToManyAddAssociationMixin<User, string>;
     public removeFollowing!: BelongsToManyRemoveAssociationMixin<User, string>;
     public getFollowers!: BelongsToManyGetAssociationsMixin<User>;
+    // New: Mixins for liked publications
+    public getLikedPublications!: BelongsToManyGetAssociationsMixin<Publication>;
+    public addLikedPublication!: BelongsToManyAddAssociationMixin<Publication, string>;
+    public removeLikedPublication!: BelongsToManyRemoveAssociationMixin<Publication, string>;
 }
 
 // --- Initialize User Model ---

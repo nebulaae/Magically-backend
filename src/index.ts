@@ -11,7 +11,8 @@ import { setupAssociations } from './models/associations';
 
 // Import routes
 import authRoutes from './routes/auth';
-import userRoutes from './routes/user'; // <-- IMPORT NEW USER ROUTES
+import userRoutes from './routes/user';
+import publicationRoutes from './routes/publication'; // New: Import publication routes
 
 dotenv.config()
 
@@ -32,12 +33,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Serve static files from the 'public' directory
-// This is crucial for making avatars accessible via URL
+// This is crucial for making avatars and publication images accessible via URL
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes); // <-- USE NEW USER ROUTES
+app.use('/api/users', userRoutes);
+app.use('/api/publications', publicationRoutes); // New: Use publication routes
 
 // Health check route
 app.get('/api/health', (req, res) => {
