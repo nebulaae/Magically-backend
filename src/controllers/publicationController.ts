@@ -5,24 +5,7 @@ import { Op } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
 import { Publication } from '../models/Publication';
-
-// Placeholder for AI Classification (as explained previously)
-async function classifyContent(content: string, imageUrl?: string): Promise<string> {
-    // In a real application, this would involve calling an external ML service
-    // or using a library like @tensorflow/tfjs-node for inference.
-    if (imageUrl) {
-        // Imagine calling an image classification model here
-        // Example: if image recognition determines it's a "cat" or "food"
-        return "Image_Content"; // Or more specific categories like "Nature", "Animals", "Art"
-    } else {
-        // Imagine calling a text classification model here
-        if (content.toLowerCase().includes('news') || content.toLowerCase().includes('current events')) return 'News';
-        if (content.toLowerCase().includes('tech') || content.toLowerCase().includes('software')) return 'Technology';
-        if (content.toLowerCase().includes('food') || content.toLowerCase().includes('recipe')) return 'Food';
-        if (content.toLowerCase().includes('travel') || content.toLowerCase().includes('adventure')) return 'Travel';
-        return 'General';
-    }
-}
+import { classifyContent, getSimilarCategories, PublicationCategory } from '../services/classificationService';
 
 // Ensure the directory for publication images exists
 const publicationImageDir = path.join(__dirname, '../../public/publications');
@@ -45,7 +28,7 @@ export const createPublication = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Publication must have content or an image.' });
         }
 
-        // Classify the content/image
+        // Classify the content/image using the new classification service
         const category = await classifyContent(content, imageUrl);
 
         const publication = await Publication.create({
@@ -212,15 +195,26 @@ export const getRecommendedPublications = async (req: Request, res: Response) =>
         }
 
         const userInterests = user.interests;
-
         let recommendations: Publication[] = [];
 
         if (userInterests && userInterests.length > 0) {
-            // Find publications matching user's interests
+            // Get similar categories for better recommendations
+            const allRelevantCategories = new Set<string>();
+
+            // Add user's direct interests
+            userInterests.forEach(interest => allRelevantCategories.add(interest));
+
+            // Add similar categories for each interest
+            userInterests.forEach(interest => {
+                const similarCategories = getSimilarCategories(interest as PublicationCategory);
+                similarCategories.forEach(cat => allRelevantCategories.add(cat));
+            });
+
+            // Find publications matching user's interests and similar categories
             recommendations = await Publication.findAll({
                 where: {
                     category: {
-                        [Op.in]: userInterests
+                        [Op.in]: Array.from(allRelevantCategories)
                     },
                     userId: {
                         [Op.ne]: userId // Exclude own publications
@@ -235,6 +229,16 @@ export const getRecommendedPublications = async (req: Request, res: Response) =>
                 ],
                 order: [['createdAt', 'DESC']],
                 limit: 20 // Limit recommendations
+            });
+
+            // Sort recommendations by relevance (direct interests first)
+            recommendations.sort((a, b) => {
+                const aIsDirect = userInterests.includes(a.category || '');
+                const bIsDirect = userInterests.includes(b.category || '');
+
+                if (aIsDirect && !bIsDirect) return -1;
+                if (!aIsDirect && bIsDirect) return 1;
+                return 0; // Keep original order for same relevance level
             });
         }
 
@@ -257,15 +261,23 @@ export const getRecommendedPublications = async (req: Request, res: Response) =>
                     }
                 ],
                 order: [['createdAt', 'DESC']],
-                limit: 10 // Add some general popular posts
+                limit: 10 - recommendations.length // Fill up to 10 total
             });
             recommendations = [...recommendations, ...generalPublications];
         }
 
-        // Shuffle to provide variety
-        recommendations.sort(() => Math.random() - 0.5);
+        // Add some randomization to provide variety while maintaining relevance
+        const directInterestPosts = recommendations.filter(p => userInterests?.includes(p.category || ''));
+        const similarInterestPosts = recommendations.filter(p => !userInterests?.includes(p.category || ''));
 
-        res.json(recommendations);
+        // Shuffle each group separately
+        directInterestPosts.sort(() => Math.random() - 0.5);
+        similarInterestPosts.sort(() => Math.random() - 0.5);
+
+        // Combine with direct interests first
+        const finalRecommendations = [...directInterestPosts, ...similarInterestPosts];
+
+        res.json(finalRecommendations);
     } catch (error) {
         console.error('Get recommended publications error:', error);
         res.status(500).json({ message: 'Server error' });

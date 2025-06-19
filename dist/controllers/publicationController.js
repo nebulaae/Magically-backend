@@ -9,28 +9,7 @@ const path_1 = __importDefault(require("path"));
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
 const Publication_1 = require("../models/Publication");
-// Placeholder for AI Classification (as explained previously)
-async function classifyContent(content, imageUrl) {
-    // In a real application, this would involve calling an external ML service
-    // or using a library like @tensorflow/tfjs-node for inference.
-    if (imageUrl) {
-        // Imagine calling an image classification model here
-        // Example: if image recognition determines it's a "cat" or "food"
-        return "Image_Content"; // Or more specific categories like "Nature", "Animals", "Art"
-    }
-    else {
-        // Imagine calling a text classification model here
-        if (content.toLowerCase().includes('news') || content.toLowerCase().includes('current events'))
-            return 'News';
-        if (content.toLowerCase().includes('tech') || content.toLowerCase().includes('software'))
-            return 'Technology';
-        if (content.toLowerCase().includes('food') || content.toLowerCase().includes('recipe'))
-            return 'Food';
-        if (content.toLowerCase().includes('travel') || content.toLowerCase().includes('adventure'))
-            return 'Travel';
-        return 'General';
-    }
-}
+const classificationService_1 = require("../services/classificationService");
 // Ensure the directory for publication images exists
 const publicationImageDir = path_1.default.join(__dirname, '../../public/publications');
 if (!fs_1.default.existsSync(publicationImageDir)) {
@@ -48,8 +27,8 @@ const createPublication = async (req, res) => {
         if (!content && !imageUrl) {
             return res.status(400).json({ message: 'Publication must have content or an image.' });
         }
-        // Classify the content/image
-        const category = await classifyContent(content, imageUrl);
+        // Classify the content/image using the new classification service
+        const category = await (0, classificationService_1.classifyContent)(content, imageUrl);
         const publication = await Publication_1.Publication.create({
             userId,
             content,
@@ -205,11 +184,20 @@ const getRecommendedPublications = async (req, res) => {
         const userInterests = user.interests;
         let recommendations = [];
         if (userInterests && userInterests.length > 0) {
-            // Find publications matching user's interests
+            // Get similar categories for better recommendations
+            const allRelevantCategories = new Set();
+            // Add user's direct interests
+            userInterests.forEach(interest => allRelevantCategories.add(interest));
+            // Add similar categories for each interest
+            userInterests.forEach(interest => {
+                const similarCategories = (0, classificationService_1.getSimilarCategories)(interest);
+                similarCategories.forEach(cat => allRelevantCategories.add(cat));
+            });
+            // Find publications matching user's interests and similar categories
             recommendations = await Publication_1.Publication.findAll({
                 where: {
                     category: {
-                        [sequelize_1.Op.in]: userInterests
+                        [sequelize_1.Op.in]: Array.from(allRelevantCategories)
                     },
                     userId: {
                         [sequelize_1.Op.ne]: userId // Exclude own publications
@@ -224,6 +212,16 @@ const getRecommendedPublications = async (req, res) => {
                 ],
                 order: [['createdAt', 'DESC']],
                 limit: 20 // Limit recommendations
+            });
+            // Sort recommendations by relevance (direct interests first)
+            recommendations.sort((a, b) => {
+                const aIsDirect = userInterests.includes(a.category || '');
+                const bIsDirect = userInterests.includes(b.category || '');
+                if (aIsDirect && !bIsDirect)
+                    return -1;
+                if (!aIsDirect && bIsDirect)
+                    return 1;
+                return 0; // Keep original order for same relevance level
             });
         }
         // If no specific recommendations or not enough, fill with general popular posts
@@ -245,13 +243,19 @@ const getRecommendedPublications = async (req, res) => {
                     }
                 ],
                 order: [['createdAt', 'DESC']],
-                limit: 10 // Add some general popular posts
+                limit: 10 - recommendations.length // Fill up to 10 total
             });
             recommendations = [...recommendations, ...generalPublications];
         }
-        // Shuffle to provide variety
-        recommendations.sort(() => Math.random() - 0.5);
-        res.json(recommendations);
+        // Add some randomization to provide variety while maintaining relevance
+        const directInterestPosts = recommendations.filter(p => userInterests === null || userInterests === void 0 ? void 0 : userInterests.includes(p.category || ''));
+        const similarInterestPosts = recommendations.filter(p => !(userInterests === null || userInterests === void 0 ? void 0 : userInterests.includes(p.category || '')));
+        // Shuffle each group separately
+        directInterestPosts.sort(() => Math.random() - 0.5);
+        similarInterestPosts.sort(() => Math.random() - 0.5);
+        // Combine with direct interests first
+        const finalRecommendations = [...directInterestPosts, ...similarInterestPosts];
+        res.json(finalRecommendations);
     }
     catch (error) {
         console.error('Get recommended publications error:', error);
