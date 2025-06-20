@@ -3,18 +3,50 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRecommendedPublications = exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.getPublicationById = exports.getAllPublications = exports.createPublication = void 0;
+exports.getRecommendedPublications = exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.updatePublication = exports.getPublicationById = exports.getAllPublications = exports.createPublication = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
 const Publication_1 = require("../models/Publication");
+const Subscription_1 = require("../models/Subscription");
+const LikedPublication_1 = require("../models/LikedPublication");
 const classificationService_1 = require("../services/classificationService");
 // Ensure the directory for publication images exists
 const publicationImageDir = path_1.default.join(__dirname, '../../public/publications');
 if (!fs_1.default.existsSync(publicationImageDir)) {
     fs_1.default.mkdirSync(publicationImageDir, { recursive: true });
 }
+// Helper function to add isFollowing and isLiked flags
+const addExtraInfoToPublications = async (publications, userId) => {
+    const authorIds = publications.map(p => p.userId);
+    const publicationIds = publications.map(p => p.id);
+    // Find which authors the user is following
+    const following = await Subscription_1.Subscription.findAll({
+        where: {
+            followerId: userId,
+            followingId: {
+                [sequelize_1.Op.in]: authorIds,
+            },
+        },
+    });
+    const followingIds = new Set(following.map(sub => sub.followingId));
+    // Find which publications the user has liked
+    const liked = await LikedPublication_1.LikedPublication.findAll({
+        where: {
+            userId: userId,
+            publicationId: {
+                [sequelize_1.Op.in]: publicationIds,
+            },
+        },
+    });
+    const likedPublicationIds = new Set(liked.map(like => like.publicationId));
+    // Return publications with the new fields
+    return publications.map(p => {
+        const publicationJson = p.toJSON();
+        return Object.assign(Object.assign({}, publicationJson), { isFollowing: followingIds.has(p.userId), isLiked: likedPublicationIds.has(p.id) });
+    });
+};
 // --- Create Publication ---
 const createPublication = async (req, res) => {
     try {
@@ -46,6 +78,7 @@ exports.createPublication = createPublication;
 // --- Get All Publications (Feed) ---
 const getAllPublications = async (req, res) => {
     try {
+        const userId = req.user.id;
         const publications = await Publication_1.Publication.findAll({
             order: [['createdAt', 'DESC']], // Latest first
             include: [
@@ -56,7 +89,8 @@ const getAllPublications = async (req, res) => {
                 }
             ]
         });
-        res.json(publications);
+        const publicationsWithInfo = await addExtraInfoToPublications(publications, userId);
+        res.json(publicationsWithInfo);
     }
     catch (error) {
         console.error('Get all publications error:', error);
@@ -68,6 +102,7 @@ exports.getAllPublications = getAllPublications;
 const getPublicationById = async (req, res) => {
     try {
         const { publicationId } = req.params;
+        const userId = req.user.id;
         const publication = await Publication_1.Publication.findByPk(publicationId, {
             include: [
                 {
@@ -80,7 +115,8 @@ const getPublicationById = async (req, res) => {
         if (!publication) {
             return res.status(404).json({ message: 'Publication not found' });
         }
-        res.json(publication);
+        const publicationsWithInfo = await addExtraInfoToPublications([publication], userId);
+        res.json(publicationsWithInfo[0]);
     }
     catch (error) {
         console.error('Get publication by ID error:', error);
@@ -88,6 +124,34 @@ const getPublicationById = async (req, res) => {
     }
 };
 exports.getPublicationById = getPublicationById;
+// --- [NEW] Update a Publication ---
+const updatePublication = async (req, res) => {
+    try {
+        const { publicationId } = req.params;
+        const { content } = req.body;
+        const userId = req.user.id;
+        const publication = await Publication_1.Publication.findByPk(publicationId);
+        if (!publication) {
+            return res.status(404).json({ message: 'Publication not found' });
+        }
+        // Check if the user is the author of the publication
+        if (publication.userId !== userId) {
+            return res.status(403).json({ message: 'You are not authorized to edit this publication' });
+        }
+        publication.content = content || publication.content;
+        // Re-classify content if it has changed
+        if (content) {
+            publication.category = await (0, classificationService_1.classifyContent)(content, publication.imageUrl);
+        }
+        await publication.save();
+        res.json({ message: 'Publication updated successfully', publication });
+    }
+    catch (error) {
+        console.error('Update publication error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.updatePublication = updatePublication;
 // --- Like a Publication ---
 const likePublication = async (req, res) => {
     try {
@@ -165,7 +229,8 @@ const getMyLikedPublications = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
-        res.json(likedPublications);
+        const publicationsWithInfo = await addExtraInfoToPublications(likedPublications, userId);
+        res.json(publicationsWithInfo);
     }
     catch (error) {
         console.error('Get liked publications error:', error);
@@ -177,23 +242,26 @@ exports.getMyLikedPublications = getMyLikedPublications;
 const getRecommendedPublications = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = await User_1.User.findByPk(userId);
+        const user = await User_1.User.findByPk(userId, {
+            include: [{
+                    model: Publication_1.Publication,
+                    as: 'likedPublications'
+                }]
+        });
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        const userInterests = user.interests;
+        const userInterests = user.interests || [];
+        const likedPublicationIds = (user.likedPublications || []).map((p) => p.id);
+        const myPublicationIds = (await user.getPublications()).map(p => p.id);
+        const excludedPublicationIds = [...new Set([...likedPublicationIds, ...myPublicationIds])];
         let recommendations = [];
         if (userInterests && userInterests.length > 0) {
-            // Get similar categories for better recommendations
-            const allRelevantCategories = new Set();
-            // Add user's direct interests
-            userInterests.forEach(interest => allRelevantCategories.add(interest));
-            // Add similar categories for each interest
+            const allRelevantCategories = new Set(userInterests);
             userInterests.forEach(interest => {
                 const similarCategories = (0, classificationService_1.getSimilarCategories)(interest);
                 similarCategories.forEach(cat => allRelevantCategories.add(cat));
             });
-            // Find publications matching user's interests and similar categories
             recommendations = await Publication_1.Publication.findAll({
                 where: {
                     category: {
@@ -201,6 +269,10 @@ const getRecommendedPublications = async (req, res) => {
                     },
                     userId: {
                         [sequelize_1.Op.ne]: userId // Exclude own publications
+                    },
+                    // [FIX] Exclude already liked publications
+                    id: {
+                        [sequelize_1.Op.notIn]: excludedPublicationIds
                     }
                 },
                 include: [
@@ -211,28 +283,18 @@ const getRecommendedPublications = async (req, res) => {
                     }
                 ],
                 order: [['createdAt', 'DESC']],
-                limit: 20 // Limit recommendations
-            });
-            // Sort recommendations by relevance (direct interests first)
-            recommendations.sort((a, b) => {
-                const aIsDirect = userInterests.includes(a.category || '');
-                const bIsDirect = userInterests.includes(b.category || '');
-                if (aIsDirect && !bIsDirect)
-                    return -1;
-                if (!aIsDirect && bIsDirect)
-                    return 1;
-                return 0; // Keep original order for same relevance level
+                limit: 20
             });
         }
-        // If no specific recommendations or not enough, fill with general popular posts
-        if (recommendations.length < 10) { // Ensure a minimum number of recommendations
+        // Fallback for more content
+        if (recommendations.length < 20) {
             const generalPublications = await Publication_1.Publication.findAll({
                 where: {
                     id: {
-                        [sequelize_1.Op.notIn]: recommendations.map(p => p.id) // Avoid duplicates
+                        [sequelize_1.Op.notIn]: [...excludedPublicationIds, ...recommendations.map(p => p.id)]
                     },
                     userId: {
-                        [sequelize_1.Op.ne]: userId // Exclude own publications
+                        [sequelize_1.Op.ne]: userId
                     }
                 },
                 include: [
@@ -243,18 +305,13 @@ const getRecommendedPublications = async (req, res) => {
                     }
                 ],
                 order: [['createdAt', 'DESC']],
-                limit: 10 - recommendations.length // Fill up to 10 total
+                limit: 20 - recommendations.length
             });
-            recommendations = [...recommendations, ...generalPublications];
+            recommendations.push(...generalPublications);
         }
-        // Add some randomization to provide variety while maintaining relevance
-        const directInterestPosts = recommendations.filter(p => userInterests === null || userInterests === void 0 ? void 0 : userInterests.includes(p.category || ''));
-        const similarInterestPosts = recommendations.filter(p => !(userInterests === null || userInterests === void 0 ? void 0 : userInterests.includes(p.category || '')));
-        // Shuffle each group separately
-        directInterestPosts.sort(() => Math.random() - 0.5);
-        similarInterestPosts.sort(() => Math.random() - 0.5);
-        // Combine with direct interests first
-        const finalRecommendations = [...directInterestPosts, ...similarInterestPosts];
+        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
+        // Shuffle for variety
+        finalRecommendations.sort(() => Math.random() - 0.5);
         res.json(finalRecommendations);
     }
     catch (error) {

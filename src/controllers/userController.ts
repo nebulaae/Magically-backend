@@ -4,50 +4,81 @@ import path from 'path';
 import { Op } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
-import { Subscription } from '../models/Subscription'; // Import Subscription model
+import { Publication } from '../models/Publication';
+import { Subscription } from '../models/Subscription';
+import { LikedPublication } from '../models/LikedPublication';
 
-// --- Helper function for AI Classification (Placeholder) ---
-// In a real application, this would involve calling an external ML service
-// or using a library like @tensorflow/tfjs-node for inference.
-async function classifyContent(content: string, imageUrl?: string): Promise<string> {
-    // Placeholder for AI classification
-    // For demonstration, let's just return a static category or infer based on keywords.
-    if (imageUrl) {
-        // Imagine calling an image classification model here
-        // Example: if image recognition determines it's a "cat" or "food"
-        return "Image_Content"; // Or more specific categories like "Nature", "Animals", "Art"
-    } else {
-        // Imagine calling a text classification model here
-        if (content.toLowerCase().includes('news') || content.toLowerCase().includes('current events')) return 'News';
-        if (content.toLowerCase().includes('tech') || content.toLowerCase().includes('software')) return 'Technology';
-        if (content.toLowerCase().includes('food') || content.toLowerCase().includes('recipe')) return 'Food';
-        if (content.toLowerCase().includes('travel') || content.toLowerCase().includes('adventure')) return 'Travel';
-        return 'General';
-    }
-}
+// Helper function from publicationController - assuming it's exported or moved to a shared service
+const addExtraInfoToPublications = async (publications: Publication[], userId: string) => {
+    const authorIds = publications.map(p => p.userId);
+    const publicationIds = publications.map(p => p.id);
+
+    const following = await Subscription.findAll({
+        where: { followerId: userId, followingId: { [Op.in]: authorIds } },
+    });
+    const followingIds = new Set(following.map(sub => sub.followingId));
+
+    const liked = await LikedPublication.findAll({
+        where: { userId: userId, publicationId: { [Op.in]: publicationIds } },
+    });
+    const likedPublicationIds = new Set(liked.map(like => like.publicationId));
+
+    return publications.map(p => {
+        const publicationJson = p.toJSON();
+        return {
+            ...publicationJson,
+            isFollowing: followingIds.has(p.userId),
+            isLiked: likedPublicationIds.has(p.id),
+        };
+    });
+};
+
+// Helper function to add isFollowing flag to a list of users
+const addIsFollowingInfoToUsers = async (users: User[], currentUserId: string) => {
+    const userIds = users.map(u => u.id);
+    const subscriptions = await Subscription.findAll({
+        where: {
+            followerId: currentUserId,
+            followingId: { [Op.in]: userIds }
+        }
+    });
+    const followingIds = new Set(subscriptions.map(s => s.followingId));
+
+    return users.map(user => {
+        const userJson = user.toJSON();
+        delete userJson.password; // ensure password is not returned
+        return {
+            ...userJson,
+            isFollowing: followingIds.has(user.id)
+        };
+    });
+};
 
 // --- Get User Profile ---
 export const getProfile = async (req: Request, res: Response) => {
     try {
         const { username } = req.params;
-        const currentUser = req.user; // Authenticated user from middleware
+        const currentUser = req.user;
 
         const user = await User.findOne({
             where: { username },
-            attributes: { exclude: ['password', 'email'] }, // Don't expose sensitive info
-            // Do NOT include associations here if you only need counts
+            attributes: { exclude: ['password', 'email'] },
         });
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Get counts directly
-        const publicationsCount = (await user.getPublications()).length;
+        const publications = await user.getPublications({
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+            order: [['createdAt', 'DESC']]
+        });
+        const publicationsWithInfo = await addExtraInfoToPublications(publications, currentUser.id);
+
+        const publicationsCount = publications.length;
         const followersCount = (await user.getFollowers()).length;
         const followingCount = (await user.getFollowing()).length;
-        
-        // Check if the current authenticated user is following this profile
+
         let isFollowing = false;
         if (currentUser && currentUser.id !== user.id) {
             const subscription = await Subscription.findOne({
@@ -56,12 +87,9 @@ export const getProfile = async (req: Request, res: Response) => {
                     followingId: user.id
                 }
             });
-            isFollowing = !!subscription; // True if subscription exists, false otherwise
+            isFollowing = !!subscription;
         } else if (currentUser && currentUser.id === user.id) {
-            // If it's the current user's own profile, they are "following" themselves in a conceptual sense
-            // or you can set this to false depending on your UI/logic needs.
-            // For simplicity, let's keep it true if it's their own profile.
-            isFollowing = true;
+            isFollowing = false; // You don't follow yourself
         }
 
         const userResponse = user.get({ plain: true });
@@ -71,7 +99,8 @@ export const getProfile = async (req: Request, res: Response) => {
             publicationsCount,
             followersCount,
             followingCount,
-            isFollowing // New: Indicate if current user is following this profile
+            isFollowing,
+            publications: publicationsWithInfo // [NEW] Return publications
         });
     } catch (error) {
         console.error('Get profile error:', error);
@@ -84,16 +113,20 @@ export const getMe = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
         const user = await User.findByPk(userId, {
-            attributes: { exclude: ['password', 'email'] },
-            // Do NOT include associations here if you only need counts
+            attributes: { exclude: ['password'] }, // email can be included for self-profile
         });
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Get counts directly
-        const publicationsCount = (await user.getPublications()).length;
+        const publications = await user.getPublications({
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+            order: [['createdAt', 'DESC']]
+        });
+        const publicationsWithInfo = await addExtraInfoToPublications(publications, userId);
+
+        const publicationsCount = publications.length;
         const followersCount = (await user.getFollowers()).length;
         const followingCount = (await user.getFollowing()).length;
 
@@ -104,9 +137,56 @@ export const getMe = async (req: Request, res: Response) => {
             publicationsCount,
             followersCount,
             followingCount,
+            publications: publicationsWithInfo // [NEW] Return publications
         });
     } catch (error) {
         console.error('Get current user profile error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// --- Get My Followers ---
+export const getMyFollowers = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user.id;
+
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const followers = await user.getFollowers({
+            attributes: ['id', 'username', 'fullname', 'avatar']
+        });
+
+        const followersWithInfo = await addIsFollowingInfoToUsers(followers, userId);
+
+        res.json(followersWithInfo);
+    } catch (error) {
+        console.error('Get my followers error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// --- Get My Followings ---
+export const getMyFollowings = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user.id;
+
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const followings = await user.getFollowing({
+            attributes: ['id', 'username', 'fullname', 'avatar']
+        });
+
+        const followingsWithInfo = await addIsFollowingInfoToUsers(followings, userId);
+
+        res.json(followingsWithInfo);
+    } catch (error) {
+        console.error('Get my followings error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -124,7 +204,7 @@ export const updateProfile = async (req: Request, res: Response) => {
 
         user.fullname = fullname || user.fullname;
         user.bio = bio || user.bio;
-        // Ensure interests is an array
+
         if (Array.isArray(interests)) {
             user.interests = interests;
         }
@@ -150,7 +230,6 @@ export const updateAvatar = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // If user already has an avatar, delete the old one
         if (user.avatar) {
             const oldAvatarPath = path.join(__dirname, '../../public', user.avatar);
             if (fs.existsSync(oldAvatarPath)) {
@@ -162,7 +241,6 @@ export const updateAvatar = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'No file uploaded.' });
         }
 
-        // The path should be a URL path, not a file system path
         const avatarUrlPath = `/users/avatars/${req.file.filename}`;
         user.avatar = avatarUrlPath;
         await user.save();
@@ -176,11 +254,12 @@ export const updateAvatar = async (req: Request, res: Response) => {
     }
 };
 
-
 // --- Search for Users ---
 export const searchUsers = async (req: Request, res: Response) => {
     try {
         const { query } = req.query;
+        const currentUserId = req.user.id;
+
         if (!query || typeof query !== 'string') {
             return res.status(400).json({ message: 'Search query is required' });
         }
@@ -188,15 +267,18 @@ export const searchUsers = async (req: Request, res: Response) => {
         const users = await User.findAll({
             where: {
                 [Op.or]: [
-                    { username: { [Op.iLike]: `%${query}%` } }, // Case-insensitive search
+                    { username: { [Op.iLike]: `%${query}%` } },
                     { fullname: { [Op.iLike]: `%${query}%` } }
-                ]
+                ],
+                id: { [Op.ne]: currentUserId } // Exclude self from search results
             },
             attributes: ['id', 'username', 'fullname', 'bio', 'avatar'],
             limit: 10
         });
 
-        res.json(users);
+        const usersWithFollowingInfo = await addIsFollowingInfoToUsers(users, currentUserId);
+
+        res.json(usersWithFollowingInfo);
     } catch (error) {
         console.error('Search users error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -255,3 +337,51 @@ export const unsubscribe = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// --- Get User's Followers ---
+export const getFollowers = async (req: Request, res: Response) => {
+    try {
+        const { username } = req.params;
+        const currentUserId = req.user.id;
+
+        const user = await User.findOne({ where: { username } });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const followers = await user.getFollowers({
+            attributes: ['id', 'username', 'fullname', 'avatar']
+        });
+
+        const followersWithInfo = await addIsFollowingInfoToUsers(followers, currentUserId);
+
+        res.json(followersWithInfo);
+    } catch (error) {
+        console.error('Get followers error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
+
+// --- Get User's Following ---
+export const getFollowing = async (req: Request, res: Response) => {
+    try {
+        const { username } = req.params;
+        const currentUserId = req.user.id;
+
+        const user = await User.findOne({ where: { username } });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const following = await user.getFollowing({
+            attributes: ['id', 'username', 'fullname', 'avatar']
+        });
+
+        const followingWithInfo = await addIsFollowingInfoToUsers(following, currentUserId);
+
+        res.json(followingWithInfo);
+    } catch (error) {
+        console.error('Get following error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}

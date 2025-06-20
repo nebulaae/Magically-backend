@@ -28,27 +28,30 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
-const upload_1 = require("../middleware/upload"); // Re-using avatar upload middleware for publications, or create a specific one
+const upload_1 = require("../middleware/upload");
 const publicationController = __importStar(require("../controllers/publicationController"));
 const router = express_1.default.Router();
 // Helper to wrap async route handlers
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
-// --- Authenticated Routes for Publications ---
-// Create a new publication (text or image)
+// --- Publication Routes ---
+// Get recommended publications
+// IMPORTANT: This route must come before '/:publicationId' to avoid 'recommendations' being treated as an ID.
+router.get('/recommendations', auth_1.auth, asyncHandler(publicationController.getRecommendedPublications));
+// Get current user's liked publications
+router.get('/me/liked', auth_1.auth, asyncHandler(publicationController.getMyLikedPublications));
+// Create a new publication
 router.post('/', auth_1.auth, upload_1.uploadPublicationImage, asyncHandler(publicationController.createPublication));
 // Get all publications (feed)
 router.get('/', auth_1.auth, asyncHandler(publicationController.getAllPublications));
 // Get a single publication by ID
 router.get('/:publicationId', auth_1.auth, asyncHandler(publicationController.getPublicationById));
+// Update a publication
+router.put('/:publicationId', auth_1.auth, asyncHandler(publicationController.updatePublication));
 // Like a publication
 router.post('/:publicationId/like', auth_1.auth, asyncHandler(publicationController.likePublication));
 // Unlike a publication
 router.delete('/:publicationId/unlike', auth_1.auth, asyncHandler(publicationController.unlikePublication));
-// Get current user's liked publications
-router.get('/me/liked', auth_1.auth, asyncHandler(publicationController.getMyLikedPublications));
-// Get recommended publications
-router.get('/recommendations', auth_1.auth, asyncHandler(publicationController.getRecommendedPublications));
 exports.default = router;
 //# sourceMappingURL=publication.js.map

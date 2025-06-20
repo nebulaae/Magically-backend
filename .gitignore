@@ -1,3 +1,6 @@
 .env
 .idx
 .vscode
+
+dist
+node_modules

@@ -9,6 +9,12 @@ import db from './config/database';
 // Import model associations setup
 import { setupAssociations } from './models/associations';
 
+// import classifiers
+import {
+  initImageClassifier,
+  initTextClassifier
+} from './services/classificationService';
+
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
@@ -38,8 +44,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/publications', publicationRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/publications', publicationRoutes); // New: Use publication routes
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -52,9 +58,10 @@ const startServer = async () => {
     // Setup model associations
     setupAssociations();
 
-    // Sync database models
-    // Using { alter: true } is good for development as it will add new columns
-    // without dropping tables. For production, consider using migrations.
+    // Init classifiers
+    initTextClassifier();
+    initImageClassifier();
+
     await db.sync({ alter: true });
     console.log('Database synchronized');
 

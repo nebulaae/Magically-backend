@@ -1,6 +1,7 @@
-import { pipeline } from '@xenova/transformers';
 import fs from 'fs';
 import path from 'path';
+
+import { pipeline } from '@xenova/transformers';
 
 // Define available categories that publications can belong to
 export const PUBLICATION_CATEGORIES = [
@@ -23,7 +24,60 @@ export const PUBLICATION_CATEGORIES = [
     'Gaming',
     'Fitness',
     'Animals',
-    'General'
+    'General',
+    'Politics',
+    'History',
+    'Finance',
+    'Automotive',
+    'Parenting',
+    'Relationships',
+    'Spirituality',
+    'Environment',
+    'DIY',
+    'Home',
+    'Gardening',
+    'Movies',
+    'Books',
+    'Comics',
+    'Memes',
+    'Programming',
+    'Startups',
+    'Marketing',
+    'Real Estate',
+    'Travel Tips',
+    'Events',
+    'Podcasts',
+    'Wellness',
+    'Mental Health',
+    'Personal Development',
+    'Productivity',
+    'Career',
+    'Pets',
+    'Crafts',
+    'Beauty',
+    'Shopping',
+    'Finance',
+    'Investing',
+    'Crypto',
+    'Astronomy',
+    'Mathematics',
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'Medicine',
+    'Law',
+    'Government',
+    'Comics',
+    'Anime',
+    'Cartoons',
+    'Board Games',
+    'Mobile',
+    'Web',
+    'Cloud',
+    'DevOps',
+    'Data Science',
+    'Machine Learning',
+    'Artificial Intelligence'
 ] as const;
 
 export type PublicationCategory = typeof PUBLICATION_CATEGORIES[number];
@@ -35,7 +89,7 @@ let imageClassifier: any = null;
 /**
  * Initialize text classification model
  */
-async function initTextClassifier(): Promise<any> {
+export async function initTextClassifier(): Promise<any> {
     if (!textClassifier) {
         console.log('Loading text classification model...');
         textClassifier = await pipeline(
@@ -50,7 +104,7 @@ async function initTextClassifier(): Promise<any> {
 /**
  * Initialize image classification model
  */
-async function initImageClassifier(): Promise<any> {
+export async function initImageClassifier(): Promise<any> {
     if (!imageClassifier) {
         console.log('Loading image classification model...');
         imageClassifier = await pipeline(
@@ -272,60 +326,82 @@ export async function classifyContent(content?: string, imageUrl?: string): Prom
 }
 
 /**
- * Test function to debug classification
- * You can call this function to test if classification is working
- */
-export async function testClassification() {
-    console.log('=== Testing Classification Service ===');
-
-    // Test text classification
-    const testTexts = [
-        "I love this new iPhone, it's amazing technology!",
-        "Just made delicious pasta with tomatoes and basil",
-        "Beautiful sunset at the beach during my vacation",
-        "Great workout at the gym today, feeling strong!",
-        "This painting is absolutely stunning, pure art"
-    ];
-
-    console.log('Testing text classification:');
-    for (const text of testTexts) {
-        try {
-            const category = await classifyText(text);
-            console.log(`"${text}" -> ${category}`);
-        } catch (error) {
-            console.error(`Error classifying "${text}":`, error);
-        }
-    }
-
-    console.log('=== Classification Test Complete ===');
-}
-
-/**
  * Get similar categories for recommendations
  * This function returns categories that are similar to the given category
  */
 export function getSimilarCategories(category: PublicationCategory): PublicationCategory[] {
     const similarityMap: Record<PublicationCategory, PublicationCategory[]> = {
-        'Technology': ['Science', 'Gaming', 'Business'],
-        'Food': ['Health', 'Lifestyle', 'Travel'],
-        'Travel': ['Photography', 'Nature', 'Lifestyle'],
-        'Sports': ['Fitness', 'Health', 'Entertainment'],
-        'Fashion': ['Lifestyle', 'Art', 'Photography'],
-        'Art': ['Photography', 'Fashion', 'Entertainment'],
-        'Music': ['Entertainment', 'Art', 'Lifestyle'],
-        'News': ['Business', 'Education', 'General'],
-        'Health': ['Fitness', 'Food', 'Lifestyle'],
-        'Education': ['Science', 'Technology', 'Business'],
-        'Entertainment': ['Music', 'Gaming', 'Art'],
-        'Business': ['Technology', 'News', 'Education'],
-        'Nature': ['Photography', 'Travel', 'Animals'],
-        'Photography': ['Art', 'Travel', 'Nature'],
-        'Lifestyle': ['Fashion', 'Food', 'Health'],
-        'Science': ['Technology', 'Education', 'Health'],
-        'Gaming': ['Technology', 'Entertainment', 'Art'],
-        'Fitness': ['Health', 'Sports', 'Lifestyle'],
-        'Animals': ['Nature', 'Photography', 'General'],
-        'General': ['Lifestyle', 'Entertainment', 'Photography']
+        'Technology': ['Science', 'Programming', 'Artificial Intelligence', 'Business', 'Startups', 'Web', 'Cloud'],
+        'Food': ['Health', 'Lifestyle', 'Travel', 'Wellness'],
+        'Travel': ['Photography', 'Nature', 'Travel Tips', 'Events', 'Lifestyle'],
+        'Sports': ['Fitness', 'Health', 'Entertainment', 'Events', 'Lifestyle'],
+        'Fashion': ['Lifestyle', 'Art', 'Beauty', 'Shopping', 'Photography'],
+        'Art': ['Photography', 'Fashion', 'Entertainment', 'Comics', 'Movies'],
+        'Music': ['Entertainment', 'Art', 'Lifestyle', 'Podcasts'],
+        'News': ['Business', 'Politics', 'General', 'Events'],
+        'Health': ['Fitness', 'Food', 'Lifestyle', 'Wellness', 'Mental Health'],
+        'Education': ['Science', 'Technology', 'Business', 'Mathematics', 'Personal Development'],
+        'Entertainment': ['Music', 'Gaming', 'Art', 'Movies', 'Podcasts'],
+        'Business': ['Technology', 'News', 'Education', 'Finance', 'Marketing', 'Startups'],
+        'Nature': ['Photography', 'Travel', 'Animals', 'Environment', 'Gardening'],
+        'Photography': ['Art', 'Travel', 'Nature', 'Lifestyle', 'Animals'],
+        'Lifestyle': ['Fashion', 'Food', 'Health', 'Personal Development', 'Shopping'],
+        'Science': ['Technology', 'Education', 'Health', 'Mathematics', 'Physics', 'Biology'],
+        'Gaming': ['Technology', 'Entertainment', 'Art', 'Board Games', 'Mobile'],
+        'Fitness': ['Health', 'Sports', 'Lifestyle', 'Wellness', 'Personal Development'],
+        'Animals': ['Nature', 'Photography', 'General', 'Pets'],
+        'General': ['Lifestyle', 'Entertainment', 'Photography', 'News'],
+        'Politics': ['News', 'Government', 'History', 'Law'],
+        'History': ['Politics', 'Education', 'Books', 'Law'],
+        'Finance': ['Business', 'Investing', 'Crypto', 'Real Estate'],
+        'Automotive': ['Technology', 'Travel', 'Sports'],
+        'Parenting': ['Relationships', 'Education', 'Lifestyle'],
+        'Relationships': ['Parenting', 'Lifestyle', 'Personal Development'],
+        'Spirituality': ['Personal Development', 'Wellness', 'Mental Health'],
+        'Environment': ['Nature', 'Gardening', 'Science'],
+        'DIY': ['Home', 'Crafts', 'Gardening'],
+        'Home': ['DIY', 'Gardening', 'Lifestyle'],
+        'Gardening': ['Nature', 'Home', 'DIY'],
+        'Movies': ['Entertainment', 'Art', 'Books'],
+        'Books': ['Education', 'Movies', 'Comics'],
+        'Comics': ['Art', 'Books', 'Anime', 'Cartoons'],
+        'Memes': ['Entertainment', 'Comics', 'Cartoons'],
+        'Programming': ['Technology', 'Data Science', 'Machine Learning'],
+        'Startups': ['Business', 'Technology', 'Marketing'],
+        'Marketing': ['Business', 'Startups', 'Productivity'],
+        'Real Estate': ['Finance', 'Business', 'Home'],
+        'Travel Tips': ['Travel', 'Events', 'Lifestyle'],
+        'Events': ['Entertainment', 'Travel', 'Sports'],
+        'Podcasts': ['Music', 'Entertainment', 'Personal Development'],
+        'Wellness': ['Health', 'Fitness', 'Mental Health'],
+        'Mental Health': ['Wellness', 'Health', 'Personal Development'],
+        'Personal Development': ['Education', 'Wellness', 'Productivity'],
+        'Productivity': ['Personal Development', 'Career', 'Education'],
+        'Career': ['Productivity', 'Education', 'Business'],
+        'Pets': ['Animals', 'Lifestyle', 'Health'],
+        'Crafts': ['DIY', 'Art', 'Home'],
+        'Beauty': ['Fashion', 'Lifestyle', 'Shopping'],
+        'Shopping': ['Fashion', 'Beauty', 'Lifestyle'],
+        'Investing': ['Finance', 'Business', 'Crypto'],
+        'Crypto': ['Finance', 'Investing', 'Technology'],
+        'Astronomy': ['Science', 'Physics', 'Mathematics'],
+        'Mathematics': ['Science', 'Education', 'Physics'],
+        'Physics': ['Science', 'Mathematics', 'Astronomy'],
+        'Chemistry': ['Science', 'Biology', 'Medicine'],
+        'Biology': ['Science', 'Medicine', 'Chemistry'],
+        'Medicine': ['Health', 'Biology', 'Science'],
+        'Law': ['Politics', 'Government', 'History'],
+        'Government': ['Politics', 'Law', 'History'],
+        'Anime': ['Comics', 'Cartoons', 'Art'],
+        'Cartoons': ['Comics', 'Anime', 'Memes'],
+        'Board Games': ['Gaming', 'Entertainment', 'Comics'],
+        'Mobile': ['Technology', 'Gaming', 'Web'],
+        'Web': ['Technology', 'Programming', 'Cloud'],
+        'Cloud': ['Technology', 'Web', 'DevOps'],
+        'DevOps': ['Cloud', 'Technology', 'Programming'],
+        'Data Science': ['Programming', 'Machine Learning', 'Artificial Intelligence'],
+        'Machine Learning': ['Artificial Intelligence', 'Data Science', 'Programming'],
+        'Artificial Intelligence': ['Machine Learning', 'Technology', 'Data Science'],
     };
 
     return similarityMap[category] || ['General'];
