@@ -1,11 +1,13 @@
 import db from '../config/database';
 import type { User } from './User';
+import type { Comment } from './Comment';
 import {
     Model,
     DataTypes,
     BelongsToManyAddAssociationMixin,
     BelongsToManyGetAssociationsMixin,
     BelongsToManyRemoveAssociationMixin,
+    HasManyGetAssociationsMixin,
 } from 'sequelize';
 
 // --- Publication Model Attributes ---
@@ -15,6 +17,8 @@ export interface PublicationAttributes {
     content: string;
     imageUrl?: string;
     category?: string;
+    likeCount: number;
+    commentCount: number; // New: Comment count
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -26,6 +30,8 @@ export class Publication extends Model<PublicationAttributes> implements Publica
     public content!: string;
     public imageUrl?: string;
     public category?: string;
+    public likeCount!: number;
+    public commentCount!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 
@@ -33,6 +39,7 @@ export class Publication extends Model<PublicationAttributes> implements Publica
     public getLikers!: BelongsToManyGetAssociationsMixin<User>;
     public addLiker!: BelongsToManyAddAssociationMixin<User, string>;
     public removeLiker!: BelongsToManyRemoveAssociationMixin<User, string>;
+    public getComments!: HasManyGetAssociationsMixin<Comment>;
 }
 
 // --- Initialize Publication Model ---
@@ -47,7 +54,7 @@ Publication.init(
             type: DataTypes.UUID,
             allowNull: false,
             references: {
-                model: 'users', // table name
+                model: 'users',
                 key: 'id',
             },
         },
@@ -59,9 +66,19 @@ Publication.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
-        category: { // New: Category field
+        category: {
             type: DataTypes.STRING,
-            allowNull: true, // Can be null if not classified or no relevant category
+            allowNull: true,
+        },
+        likeCount: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0
+        },
+        commentCount: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0
         }
     },
     {

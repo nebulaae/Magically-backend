@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import db from '../config/database';
-
 import type { Publication } from './Publication';
+import type { Comment } from './Comment'; // Import the Comment type
 import {
     Model,
     DataTypes,
@@ -46,16 +46,23 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     }
 
     // --- Sequelize Mixins for Associations ---
-    // These type definitions make TypeScript aware of the dynamic methods added by Sequelize.
     public getPublications!: HasManyGetAssociationsMixin<Publication>;
+
+    // Following/Followers
     public getFollowing!: BelongsToManyGetAssociationsMixin<User>;
     public addFollowing!: BelongsToManyAddAssociationMixin<User, string>;
     public removeFollowing!: BelongsToManyRemoveAssociationMixin<User, string>;
     public getFollowers!: BelongsToManyGetAssociationsMixin<User>;
-    // New: Mixins for liked publications
+
+    // Liked Publications
     public getLikedPublications!: BelongsToManyGetAssociationsMixin<Publication>;
     public addLikedPublication!: BelongsToManyAddAssociationMixin<Publication, string>;
     public removeLikedPublication!: BelongsToManyRemoveAssociationMixin<Publication, string>;
+
+    // Liked Comments
+    public getLikedComments!: BelongsToManyGetAssociationsMixin<Comment>;
+    public addLikedComment!: BelongsToManyAddAssociationMixin<Comment, string>;
+    public removeLikedComment!: BelongsToManyRemoveAssociationMixin<Comment, string>;
 }
 
 // --- Initialize User Model ---

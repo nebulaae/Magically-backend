@@ -27,9 +27,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const commentController = __importStar(require("../controllers/commentController"));
+const publicationController = __importStar(require("../controllers/publicationController"));
 const auth_1 = require("../middleware/auth");
 const upload_1 = require("../middleware/upload");
-const publicationController = __importStar(require("../controllers/publicationController"));
 const router = express_1.default.Router();
 // Helper to wrap async route handlers
 const asyncHandler = (fn) => (req, res, next) => {
@@ -38,7 +39,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 // --- Publication Routes ---
 // Get recommended publications
 // IMPORTANT: This route must come before '/:publicationId' to avoid 'recommendations' being treated as an ID.
-router.get('/recommendations', auth_1.auth, asyncHandler(publicationController.getRecommendedPublications));
+router.get('/fyp/recommendations', auth_1.auth, asyncHandler(publicationController.getRecommendedPublications));
 // Get current user's liked publications
 router.get('/me/liked', auth_1.auth, asyncHandler(publicationController.getMyLikedPublications));
 // Create a new publication
@@ -53,5 +54,20 @@ router.put('/:publicationId', auth_1.auth, asyncHandler(publicationController.up
 router.post('/:publicationId/like', auth_1.auth, asyncHandler(publicationController.likePublication));
 // Unlike a publication
 router.delete('/:publicationId/unlike', auth_1.auth, asyncHandler(publicationController.unlikePublication));
+// --- Comment Routes ---
+// Create a comment
+router.post('/:publicationId/comments', auth_1.auth, asyncHandler(commentController.createComment));
+// Get all comments for a publication (can be used for a separate comments page/section)
+router.get('/:publicationId/comments', auth_1.auth, asyncHandler(commentController.getCommentsForPublication));
+// Reply to an existing comment
+router.post('/comments/:commentId/reply', auth_1.auth, asyncHandler(commentController.replyToComment));
+// Update a comment
+router.put('/comments/:commentId', auth_1.auth, asyncHandler(commentController.updateComment));
+// Delete a comment
+router.delete('/comments/:commentId', auth_1.auth, asyncHandler(commentController.deleteComment));
+// Like a comment
+router.post('/comments/:commentId/like', auth_1.auth, asyncHandler(commentController.likeComment));
+// Unlike a comment
+router.delete('/comments/:commentId/unlike', auth_1.auth, asyncHandler(commentController.unlikeComment));
 exports.default = router;
 //# sourceMappingURL=publication.js.map

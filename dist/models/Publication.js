@@ -21,7 +21,7 @@ Publication.init({
         type: sequelize_1.DataTypes.UUID,
         allowNull: false,
         references: {
-            model: 'users', // table name
+            model: 'users',
             key: 'id',
         },
     },
@@ -35,7 +35,17 @@ Publication.init({
     },
     category: {
         type: sequelize_1.DataTypes.STRING,
-        allowNull: true, // Can be null if not classified or no relevant category
+        allowNull: true,
+    },
+    likeCount: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
+    },
+    commentCount: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
     }
 }, {
     sequelize: database_1.default,

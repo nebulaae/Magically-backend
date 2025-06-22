@@ -1,48 +1,97 @@
 import fs from 'fs';
 import path from 'path';
-
-import { Op } from 'sequelize';
+import { Op, fn, col } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
 import { Publication } from '../models/Publication';
 import { Subscription } from '../models/Subscription';
 import { LikedPublication } from '../models/LikedPublication';
+import { Comment } from '../models/Comment'; // Import Comment
 import { classifyContent, getSimilarCategories, PublicationCategory } from '../services/classificationService';
+import db from '../config/database';
 
-// Ensure the directory for publication images exists
-const publicationImageDir = path.join(__dirname, '../../public/publications');
-if (!fs.existsSync(publicationImageDir)) {
-    fs.mkdirSync(publicationImageDir, { recursive: true });
-}
+// --- Get Single Publication by ID with full comment tree ---
+export const getPublicationById = async (req: Request, res: Response) => {
+    try {
+        const { publicationId } = req.params;
+        const userId = req.user.id;
 
-// Helper function to add isFollowing and isLiked flags
+        const publication = await Publication.findByPk(publicationId, {
+            include: [
+                {
+                    model: User,
+                    as: 'author',
+                    attributes: ['id', 'username', 'fullname', 'avatar']
+                },
+                {
+                    model: Comment,
+                    as: 'comments',
+                    where: { parentId: null }, // Fetch only top-level comments
+                    required: false, // Use LEFT JOIN to get publications even with no comments
+                    include: [
+                        {
+                            model: User, as: 'author',
+                            attributes: ['id', 'username', 'fullname', 'avatar']
+                        },
+                        {
+                            model: Comment, as: 'replies',
+                            required: false,
+                            include: [{
+                                model: User, as: 'author',
+                                attributes: ['id', 'username', 'fullname', 'avatar']
+                            }]
+                        }
+                    ],
+                }
+            ],
+            order: [
+                // Order comments and their replies by creation date
+                [col('comments.createdAt'), 'ASC'],
+                [col('comments.replies.createdAt'), 'ASC'],
+            ]
+        });
+
+        if (!publication) {
+            return res.status(404).json({ message: 'Publication not found' });
+        }
+
+        // Add isLiked and isFollowing info
+        const isFollowing = await Subscription.findOne({ where: { followerId: userId, followingId: publication.userId } });
+        const isLiked = await LikedPublication.findOne({ where: { userId, publicationId: publication.id } });
+
+        const publicationJson = publication.toJSON();
+        const publicationWithExtras = {
+            ...publicationJson,
+            isFollowing: !!isFollowing,
+            isLiked: !!isLiked
+        };
+
+        res.json(publicationWithExtras);
+
+    } catch (error) {
+        console.error('Get publication by ID error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
+// --- The rest of the publication controller remains largely the same ---
+// Helper function to add extra info (likeCount and commentCount are now on the model)
 const addExtraInfoToPublications = async (publications: Publication[], userId: string) => {
+    if (publications.length === 0) return [];
     const authorIds = publications.map(p => p.userId);
     const publicationIds = publications.map(p => p.id);
 
-    // Find which authors the user is following
     const following = await Subscription.findAll({
-        where: {
-            followerId: userId,
-            followingId: {
-                [Op.in]: authorIds,
-            },
-        },
+        where: { followerId: userId, followingId: { [Op.in]: authorIds } },
     });
     const followingIds = new Set(following.map(sub => sub.followingId));
 
-    // Find which publications the user has liked
     const liked = await LikedPublication.findAll({
-        where: {
-            userId: userId,
-            publicationId: {
-                [Op.in]: publicationIds,
-            },
-        },
+        where: { userId, publicationId: { [Op.in]: publicationIds } },
     });
     const likedPublicationIds = new Set(liked.map(like => like.publicationId));
 
-    // Return publications with the new fields
     return publications.map(p => {
         const publicationJson = p.toJSON();
         return {
@@ -53,8 +102,6 @@ const addExtraInfoToPublications = async (publications: Publication[], userId: s
     });
 };
 
-
-// --- Create Publication ---
 export const createPublication = async (req: Request, res: Response) => {
     try {
         const { content } = req.body;
@@ -69,14 +116,15 @@ export const createPublication = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Publication must have content or an image.' });
         }
 
-        // Classify the content/image using the new classification service
         const category = await classifyContent(content, imageUrl);
 
         const publication = await Publication.create({
             userId,
             content,
             imageUrl,
-            category, // Save the classified category
+            category,
+            likeCount: 0,
+            commentCount: 0
         });
 
         res.status(201).json({ message: 'Publication created successfully', publication });
@@ -86,276 +134,160 @@ export const createPublication = async (req: Request, res: Response) => {
     }
 };
 
-// --- Get All Publications (Feed) ---
 export const getAllPublications = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
         const publications = await Publication.findAll({
-            order: [['createdAt', 'DESC']], // Latest first
-            include: [
-                {
-                    model: User,
-                    as: 'author',
-                    attributes: ['id', 'username', 'fullname', 'avatar']
-                }
-            ]
+            order: [['createdAt', 'DESC']],
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }]
         });
 
         const publicationsWithInfo = await addExtraInfoToPublications(publications, userId);
-        res.json(publicationsWithInfo);
 
+        res.json(publicationsWithInfo);
     } catch (error) {
         console.error('Get all publications error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-// --- Get Single Publication by ID ---
-export const getPublicationById = async (req: Request, res: Response) => {
-    try {
-        const { publicationId } = req.params;
-        const userId = req.user.id;
-        const publication = await Publication.findByPk(publicationId, {
-            include: [
-                {
-                    model: User,
-                    as: 'author',
-                    attributes: ['id', 'username', 'fullname', 'avatar']
-                }
-            ]
-        });
-
-        if (!publication) {
-            return res.status(404).json({ message: 'Publication not found' });
-        }
-
-        const publicationsWithInfo = await addExtraInfoToPublications([publication], userId);
-        res.json(publicationsWithInfo[0]);
-
-    } catch (error) {
-        console.error('Get publication by ID error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// --- [NEW] Update a Publication ---
 export const updatePublication = async (req: Request, res: Response) => {
     try {
         const { publicationId } = req.params;
         const { content } = req.body;
         const userId = req.user.id;
-
         const publication = await Publication.findByPk(publicationId);
-
-        if (!publication) {
-            return res.status(404).json({ message: 'Publication not found' });
-        }
-
-        // Check if the user is the author of the publication
-        if (publication.userId !== userId) {
-            return res.status(403).json({ message: 'You are not authorized to edit this publication' });
-        }
-
+        if (!publication) return res.status(404).json({ message: 'Publication not found' });
+        if (publication.userId !== userId) return res.status(403).json({ message: 'You are not authorized to edit this publication' });
         publication.content = content || publication.content;
-
-        // Re-classify content if it has changed
         if (content) {
             publication.category = await classifyContent(content, publication.imageUrl);
         }
-
         await publication.save();
-
         res.json({ message: 'Publication updated successfully', publication });
-
     } catch (error) {
         console.error('Update publication error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-
-// --- Like a Publication ---
 export const likePublication = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
         const { publicationId } = req.params;
-
         const publication = await Publication.findByPk(publicationId);
-        if (!publication) {
-            return res.status(404).json({ message: 'Publication not found' });
-        }
-
+        if (!publication) return res.status(404).json({ message: 'Publication not found' });
         const user = await User.findByPk(userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // Add the publication to the user's liked publications
-        await user.addLikedPublication(publication);
-
-        // Add the publication's category to user's interests if not already present
-        if (publication.category) {
-            const currentInterests = user.interests || [];
-            if (!currentInterests.includes(publication.category)) {
-                user.interests = [...currentInterests, publication.category];
-                await user.save();
+        await db.transaction(async (t) => {
+            await LikedPublication.create({ userId, publicationId }, { transaction: t });
+            await publication.increment('likeCount', { transaction: t });
+            if (publication.category) {
+                const currentInterests = user.interests || [];
+                if (!currentInterests.includes(publication.category)) {
+                    user.interests = [...currentInterests, publication.category];
+                    await user.save({ transaction: t });
+                }
             }
-        }
-
+        });
         res.status(200).json({ message: 'Publication liked successfully' });
     } catch (error) {
         console.error('Like publication error:', error);
-        if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({ message: 'You have already liked this publication.' });
-        }
+        if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ message: 'You have already liked this publication.' });
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-// --- Unlike a Publication ---
 export const unlikePublication = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
         const { publicationId } = req.params;
-
         const publication = await Publication.findByPk(publicationId);
-        if (!publication) {
-            return res.status(404).json({ message: 'Publication not found' });
-        }
+        if (!publication) return res.status(404).json({ message: 'Publication not found' });
 
-        const user = await User.findByPk(userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        const result = await user.removeLikedPublication(publication);
-
-        if (result === null) { // Sequelize returns 0 if no row was deleted
-            return res.status(404).json({ message: 'You have not liked this publication.' });
-        }
-
+        await db.transaction(async (t) => {
+            const result = await LikedPublication.destroy({ where: { userId, publicationId }, transaction: t });
+            if (result === 0) throw new Error("Not liked");
+            if (publication.likeCount > 0) {
+                await publication.decrement('likeCount', { transaction: t });
+            }
+        });
         res.status(200).json({ message: 'Publication unliked successfully' });
     } catch (error) {
+        if (error.message === 'Not liked') return res.status(404).json({ message: 'You have not liked this publication.' });
         console.error('Unlike publication error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-// --- Get Liked Publications for Current User ---
 export const getMyLikedPublications = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
         const user = await User.findByPk(userId);
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
+        if (!user) return res.status(404).json({ message: 'User not found' });
         const likedPublications = await user.getLikedPublications({
-            include: [
-                {
-                    model: User,
-                    as: 'author',
-                    attributes: ['id', 'username', 'fullname', 'avatar']
-                }
-            ],
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
             order: [['createdAt', 'DESC']]
         });
-
         const publicationsWithInfo = await addExtraInfoToPublications(likedPublications, userId);
         res.json(publicationsWithInfo);
-
     } catch (error) {
         console.error('Get liked publications error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-// --- Get Recommended Publications based on interests ---
 export const getRecommendedPublications = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
-        const user = await User.findByPk(userId, {
-            include: [{
-                model: Publication,
-                as: 'likedPublications'
-            }]
-        });
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = (page - 1) * limit;
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
+        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
+        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
         const userInterests = user.interests || [];
-        const likedPublicationIds = ((user as any).likedPublications || []).map((p: any) => p.id);
-        const myPublicationIds = (await user.getPublications()).map(p => p.id);
-        const excludedPublicationIds = [...new Set([...likedPublicationIds, ...myPublicationIds])];
-
-
-        let recommendations: Publication[] = [];
-
-        if (userInterests && userInterests.length > 0) {
+        let recommendedCategories: string[] = [];
+        if (userInterests.length > 0) {
             const allRelevantCategories = new Set<string>(userInterests);
-
             userInterests.forEach(interest => {
-                const similarCategories = getSimilarCategories(interest as PublicationCategory);
-                similarCategories.forEach(cat => allRelevantCategories.add(cat));
+                const similar = getSimilarCategories(interest as PublicationCategory);
+                similar.forEach(cat => allRelevantCategories.add(cat));
             });
-
+            recommendedCategories = Array.from(allRelevantCategories);
+        }
+        let recommendations: Publication[] = [];
+        if (recommendedCategories.length > 0) {
             recommendations = await Publication.findAll({
                 where: {
-                    category: {
-                        [Op.in]: Array.from(allRelevantCategories)
-                    },
-                    userId: {
-                        [Op.ne]: userId // Exclude own publications
-                    },
-                    // [FIX] Exclude already liked publications
-                    id: {
-                        [Op.notIn]: excludedPublicationIds
-                    }
+                    category: { [Op.in]: recommendedCategories },
+                    id: { [Op.notIn]: excludedPublicationIds },
+                    userId: { [Op.ne]: userId }
                 },
-                include: [
-                    {
-                        model: User,
-                        as: 'author',
-                        attributes: ['id', 'username', 'fullname', 'avatar']
-                    }
-                ],
-                order: [['createdAt', 'DESC']],
-                limit: 20
+                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['likeCount', 'DESC'], ['createdAt', 'DESC']],
+                limit, offset
             });
         }
-
-        // Fallback for more content
-        if (recommendations.length < 20) {
-            const generalPublications = await Publication.findAll({
+        if (recommendations.length < limit) {
+            const existingIds = recommendations.map(p => p.id);
+            const fallbackLimit = limit - recommendations.length;
+            const fallbackOffset = offset > 0 ? 0 : offset;
+            const fallbackPublications = await Publication.findAll({
                 where: {
-                    id: {
-                        [Op.notIn]: [...excludedPublicationIds, ...recommendations.map(p => p.id)]
-                    },
-                    userId: {
-                        [Op.ne]: userId
-                    }
+                    id: { [Op.notIn]: [...excludedPublicationIds, ...existingIds] },
+                    userId: { [Op.ne]: userId }
                 },
-                include: [
-                    {
-                        model: User,
-                        as: 'author',
-                        attributes: ['id', 'username', 'fullname', 'avatar']
-                    }
-                ],
-                order: [['createdAt', 'DESC']],
-                limit: 20 - recommendations.length
+                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
+                limit: fallbackLimit, offset: fallbackOffset
             });
-            recommendations.push(...generalPublications);
+            recommendations.push(...fallbackPublications);
         }
-
         const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
-
-        // Shuffle for variety
-        finalRecommendations.sort(() => Math.random() - 0.5);
-
         res.json(finalRecommendations);
     } catch (error) {
         console.error('Get recommended publications error:', error);

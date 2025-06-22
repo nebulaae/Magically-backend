@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { User } from '../models/User';
+import { Request, Response } from 'express';
 import { generateToken } from '../services/authService';
 
 // --- Register New User ---
