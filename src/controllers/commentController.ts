@@ -3,6 +3,7 @@ import { User } from '../models/User';
 import { Request, Response } from 'express';
 import { Comment } from '../models/Comment';
 import { Publication } from '../models/Publication';
+
 // --- Create a Comment ---
 export const createComment = async (req: Request, res: Response) => {
     try {
@@ -55,17 +56,13 @@ export const replyToComment = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Parent comment not found.' });
         }
 
-        // A reply cannot be a reply to another reply (only one level deep)
-        if (parentComment.parentId) {
-            return res.status(400).json({ message: 'Cannot reply to a reply.' });
-        }
-
         const publication = await Publication.findByPk(parentComment.publicationId);
         if (!publication) {
             return res.status(404).json({ message: 'Associated publication not found.' });
         }
 
-        let reply;
+        let reply: any;
+
         await db.transaction(async (t) => {
             reply = await Comment.create({
                 userId,
@@ -85,36 +82,35 @@ export const replyToComment = async (req: Request, res: Response) => {
     }
 };
 
+// Helper function to recursively fetch replies
+const fetchReplies = async (comment: Comment) => {
+    const replies = await Comment.findAll({
+        where: { parentId: comment.id },
+        include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+        order: [['createdAt', 'ASC']]
+    });
+
+    for (const reply of replies) {
+        (reply as any).dataValues.replies = await fetchReplies(reply);
+    }
+    return replies;
+};
 
 // --- Get Comments for a Publication ---
 export const getCommentsForPublication = async (req: Request, res: Response) => {
     try {
         const { publicationId } = req.params;
-
-        const comments = await Comment.findAll({
-            where: { publicationId, parentId: null }, // Only top-level comments
-            include: [
-                {
-                    model: User,
-                    as: 'author',
-                    attributes: ['id', 'username', 'fullname', 'avatar'],
-                },
-                {
-                    model: Comment,
-                    as: 'replies',
-                    include: [
-                        {
-                            model: User,
-                            as: 'author',
-                            attributes: ['id', 'username', 'fullname', 'avatar'],
-                        }
-                    ]
-                }
-            ],
+        const topLevelComments = await Comment.findAll({
+            where: { publicationId, parentId: null },
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
             order: [['createdAt', 'ASC']],
         });
 
-        res.status(200).json(comments);
+        for (const comment of topLevelComments) {
+            (comment as any).dataValues.replies = await fetchReplies(comment);
+        }
+
+        res.status(200).json(topLevelComments);
     } catch (error) {
         console.error('Get comments error:', error);
         res.status(500).json({ message: 'Server error while fetching comments.' });
@@ -189,7 +185,6 @@ export const deleteComment = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error while deleting comment.' });
     }
 };
-
 
 // --- Like a Comment ---
 export const likeComment = async (req: Request, res: Response) => {

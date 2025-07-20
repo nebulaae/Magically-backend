@@ -69,3 +69,26 @@ export const uploadPublicationImage = multer({
         cb(new Error('Error: File upload only supports image filetypes - ' + allowedTypes));
     }
 }).single('publicationImage'); // 'publicationImage' is the name of the form field
+
+
+const privateDir = path.join(__dirname, '../../private/user_uploads');
+if (!fs.existsSync(privateDir)) {
+    fs.mkdirSync(privateDir, { recursive: true });
+}
+
+// --- New: Configure multer for private image uploads for AI generation ---
+export const uploadPrivateImage = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, privateDir);
+        },
+        filename: (req, file, cb) => {
+            const userId = req.user.id;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const extension = path.extname(file.originalname);
+            cb(null, `private-${userId}-${uniqueSuffix}${extension}`);
+        }
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: fileFilter // You can reuse the existing image fileFilter
+}).single('privateImage');

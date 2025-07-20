@@ -9,8 +9,9 @@ const database_1 = __importDefault(require("../config/database"));
 const sequelize_1 = require("sequelize");
 // --- User Model Class ---
 class User extends sequelize_1.Model {
-    // Instance method to compare passwords
     async comparePassword(candidatePassword) {
+        if (!this.password)
+            return false;
         return bcrypt_1.default.compare(candidatePassword, this.password);
     }
 }
@@ -24,20 +25,18 @@ User.init({
     },
     fullname: {
         type: sequelize_1.DataTypes.STRING(32),
-        allowNull: false,
+        allowNull: true,
     },
     username: {
         type: sequelize_1.DataTypes.STRING(16),
-        allowNull: false,
+        allowNull: true,
         unique: true,
     },
     email: {
         type: sequelize_1.DataTypes.STRING(50),
         allowNull: false,
         unique: true,
-        validate: {
-            isEmail: true,
-        },
+        validate: { isEmail: true },
     },
     bio: {
         type: sequelize_1.DataTypes.STRING(72),
@@ -45,7 +44,7 @@ User.init({
     },
     password: {
         type: sequelize_1.DataTypes.STRING(60),
-        allowNull: false,
+        allowNull: true,
     },
     avatar: {
         type: sequelize_1.DataTypes.STRING,
@@ -53,6 +52,32 @@ User.init({
     },
     interests: {
         type: sequelize_1.DataTypes.ARRAY(sequelize_1.DataTypes.STRING),
+        allowNull: true,
+        defaultValue: [],
+    },
+    verified: {
+        type: sequelize_1.DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+    },
+    otp: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true,
+    },
+    otpExpires: {
+        type: sequelize_1.DataTypes.DATE,
+        allowNull: true,
+    },
+    passwordResetToken: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true,
+    },
+    passwordResetTokenExpires: {
+        type: sequelize_1.DataTypes.DATE,
+        allowNull: true,
+    },
+    gallery: {
+        type: sequelize_1.DataTypes.JSONB,
         allowNull: true,
         defaultValue: [],
     },
@@ -68,7 +93,7 @@ User.init({
             }
         },
         beforeUpdate: async (user) => {
-            if (user.changed('password')) {
+            if (user.changed('password') && user.password) {
                 const salt = await bcrypt_1.default.genSalt(10);
                 user.password = await bcrypt_1.default.hash(user.password, salt);
             }

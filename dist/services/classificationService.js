@@ -9,79 +9,22 @@ const path_1 = __importDefault(require("path"));
 const transformers_1 = require("@xenova/transformers");
 // Define available categories that publications can belong to
 exports.PUBLICATION_CATEGORIES = [
-    'Technology',
-    'Food',
-    'Travel',
-    'Sports',
-    'Fashion',
-    'Art',
-    'Music',
-    'News',
-    'Health',
-    'Education',
-    'Entertainment',
-    'Business',
-    'Nature',
-    'Photography',
-    'Lifestyle',
-    'Science',
-    'Gaming',
-    'Fitness',
-    'Animals',
-    'General',
-    'Politics',
-    'History',
-    'Finance',
-    'Automotive',
-    'Parenting',
-    'Relationships',
-    'Spirituality',
-    'Environment',
-    'DIY',
-    'Home',
-    'Gardening',
-    'Movies',
-    'Books',
-    'Comics',
-    'Memes',
-    'Programming',
-    'Startups',
-    'Marketing',
-    'Real Estate',
-    'Travel Tips',
-    'Events',
-    'Podcasts',
-    'Wellness',
-    'Mental Health',
-    'Personal Development',
-    'Productivity',
-    'Career',
-    'Pets',
-    'Crafts',
-    'Beauty',
-    'Shopping',
-    'Finance',
-    'Investing',
-    'Crypto',
-    'Astronomy',
-    'Mathematics',
-    'Physics',
-    'Chemistry',
-    'Biology',
-    'Medicine',
-    'Law',
-    'Government',
-    'Comics',
+    'Photorealistic',
+    'Cyberpunk',
+    'Fantasy',
+    'Sci-Fi',
     'Anime',
-    'Cartoons',
-    'Board Games',
-    'Mobile',
-    'Web',
-    'Cloud',
-    'DevOps',
-    'Data Science',
-    'Machine Learning',
-    'Artificial Intelligence'
+    'Classical Art',
+    'Impressionism',
+    'Abstract',
+    'Surrealism',
+    'Pop Art',
+    'Minimalist',
+    'Steampunk',
+    'Gothic',
+    'Vaporwave',
+    'Vintage',
+    'General'
 ];
 // Cache for loaded models to avoid reloading
 let textClassifier = null;
@@ -146,72 +89,65 @@ exports.classifyText = classifyText;
  */
 function mapImageLabelToCategory(label) {
     const labelLower = label.toLowerCase();
-    // Technology related
-    if (labelLower.includes('laptop') || labelLower.includes('computer') ||
-        labelLower.includes('phone') || labelLower.includes('screen') ||
-        labelLower.includes('keyboard') || labelLower.includes('mouse')) {
-        return 'Technology';
+    // Photorealistic
+    if (labelLower.includes('realistic') || labelLower.includes('photo') || labelLower.includes('photograph')) {
+        return 'Photorealistic';
     }
-    // Food related
-    if (labelLower.includes('food') || labelLower.includes('pizza') ||
-        labelLower.includes('burger') || labelLower.includes('cake') ||
-        labelLower.includes('fruit') || labelLower.includes('vegetable') ||
-        labelLower.includes('drink') || labelLower.includes('coffee') ||
-        labelLower.includes('wine') || labelLower.includes('bread')) {
-        return 'Food';
+    // Cyberpunk
+    if (labelLower.includes('cyberpunk') || labelLower.includes('neon') || labelLower.includes('futuristic city')) {
+        return 'Cyberpunk';
     }
-    // Travel related
-    if (labelLower.includes('beach') || labelLower.includes('mountain') ||
-        labelLower.includes('building') || labelLower.includes('monument') ||
-        labelLower.includes('hotel') || labelLower.includes('plane') ||
-        labelLower.includes('car') || labelLower.includes('train') ||
-        labelLower.includes('boat') || labelLower.includes('bridge')) {
-        return 'Travel';
+    // Fantasy
+    if (labelLower.includes('fantasy') || labelLower.includes('dragon') || labelLower.includes('magic') || labelLower.includes('elf')) {
+        return 'Fantasy';
     }
-    // Sports related
-    if (labelLower.includes('ball') || labelLower.includes('sport') ||
-        labelLower.includes('stadium') || labelLower.includes('gym') ||
-        labelLower.includes('bicycle') || labelLower.includes('skateboard')) {
-        return 'Sports';
+    // Sci-Fi
+    if (labelLower.includes('sci-fi') || labelLower.includes('spaceship') || labelLower.includes('robot') || labelLower.includes('alien')) {
+        return 'Sci-Fi';
     }
-    // Fashion related
-    if (labelLower.includes('dress') || labelLower.includes('shirt') ||
-        labelLower.includes('shoe') || labelLower.includes('bag') ||
-        labelLower.includes('hat') || labelLower.includes('glasses') ||
-        labelLower.includes('jewelry') || labelLower.includes('watch')) {
-        return 'Fashion';
+    // Anime
+    if (labelLower.includes('anime') || labelLower.includes('manga') || labelLower.includes('cartoon')) {
+        return 'Anime';
     }
-    // Animals
-    if (labelLower.includes('dog') || labelLower.includes('cat') ||
-        labelLower.includes('bird') || labelLower.includes('horse') ||
-        labelLower.includes('fish') || labelLower.includes('animal') ||
-        labelLower.includes('pet') || labelLower.includes('wildlife')) {
-        return 'Animals';
+    // Classical Art
+    if (labelLower.includes('classical') || labelLower.includes('renaissance') || labelLower.includes('baroque') || labelLower.includes('oil painting')) {
+        return 'Classical Art';
     }
-    // Nature
-    if (labelLower.includes('tree') || labelLower.includes('flower') ||
-        labelLower.includes('plant') || labelLower.includes('garden') ||
-        labelLower.includes('forest') || labelLower.includes('sky') ||
-        labelLower.includes('sunset') || labelLower.includes('landscape')) {
-        return 'Nature';
+    // Impressionism
+    if (labelLower.includes('impressionism') || labelLower.includes('monet') || labelLower.includes('brushstroke')) {
+        return 'Impressionism';
     }
-    // Art/Photography
-    if (labelLower.includes('painting') || labelLower.includes('sculpture') ||
-        labelLower.includes('camera') || labelLower.includes('photo') ||
-        labelLower.includes('art') || labelLower.includes('museum')) {
-        return labelLower.includes('camera') || labelLower.includes('photo') ? 'Photography' : 'Art';
+    // Abstract
+    if (labelLower.includes('abstract') || labelLower.includes('geometric') || labelLower.includes('nonrepresentational')) {
+        return 'Abstract';
     }
-    // Music
-    if (labelLower.includes('guitar') || labelLower.includes('piano') ||
-        labelLower.includes('microphone') || labelLower.includes('speaker') ||
-        labelLower.includes('headphones') || labelLower.includes('instrument')) {
-        return 'Music';
+    // Surrealism
+    if (labelLower.includes('surrealism') || labelLower.includes('dreamlike') || labelLower.includes('dali')) {
+        return 'Surrealism';
     }
-    // Health/Fitness
-    if (labelLower.includes('exercise') || labelLower.includes('yoga') ||
-        labelLower.includes('gym') || labelLower.includes('medicine') ||
-        labelLower.includes('hospital') || labelLower.includes('doctor')) {
-        return 'Fitness';
+    // Pop Art
+    if (labelLower.includes('pop art') || labelLower.includes('warhol') || labelLower.includes('comic style')) {
+        return 'Pop Art';
+    }
+    // Minimalist
+    if (labelLower.includes('minimalist') || labelLower.includes('simple') || labelLower.includes('clean')) {
+        return 'Minimalist';
+    }
+    // Steampunk
+    if (labelLower.includes('steampunk') || labelLower.includes('gears') || labelLower.includes('victorian')) {
+        return 'Steampunk';
+    }
+    // Gothic
+    if (labelLower.includes('gothic') || labelLower.includes('dark') || labelLower.includes('cathedral')) {
+        return 'Gothic';
+    }
+    // Vaporwave
+    if (labelLower.includes('vaporwave') || labelLower.includes('retro') || labelLower.includes('80s') || labelLower.includes('synthwave')) {
+        return 'Vaporwave';
+    }
+    // Vintage
+    if (labelLower.includes('vintage') || labelLower.includes('old-fashioned') || labelLower.includes('retro')) {
+        return 'Vintage';
     }
     // Default to General for unrecognized labels
     return 'General';
@@ -293,77 +229,22 @@ exports.classifyContent = classifyContent;
  */
 function getSimilarCategories(category) {
     const similarityMap = {
-        'Technology': ['Science', 'Programming', 'Artificial Intelligence', 'Business', 'Startups', 'Web', 'Cloud'],
-        'Food': ['Health', 'Lifestyle', 'Travel', 'Wellness'],
-        'Travel': ['Photography', 'Nature', 'Travel Tips', 'Events', 'Lifestyle'],
-        'Sports': ['Fitness', 'Health', 'Entertainment', 'Events', 'Lifestyle'],
-        'Fashion': ['Lifestyle', 'Art', 'Beauty', 'Shopping', 'Photography'],
-        'Art': ['Photography', 'Fashion', 'Entertainment', 'Comics', 'Movies'],
-        'Music': ['Entertainment', 'Art', 'Lifestyle', 'Podcasts'],
-        'News': ['Business', 'Politics', 'General', 'Events'],
-        'Health': ['Fitness', 'Food', 'Lifestyle', 'Wellness', 'Mental Health'],
-        'Education': ['Science', 'Technology', 'Business', 'Mathematics', 'Personal Development'],
-        'Entertainment': ['Music', 'Gaming', 'Art', 'Movies', 'Podcasts'],
-        'Business': ['Technology', 'News', 'Education', 'Finance', 'Marketing', 'Startups'],
-        'Nature': ['Photography', 'Travel', 'Animals', 'Environment', 'Gardening'],
-        'Photography': ['Art', 'Travel', 'Nature', 'Lifestyle', 'Animals'],
-        'Lifestyle': ['Fashion', 'Food', 'Health', 'Personal Development', 'Shopping'],
-        'Science': ['Technology', 'Education', 'Health', 'Mathematics', 'Physics', 'Biology'],
-        'Gaming': ['Technology', 'Entertainment', 'Art', 'Board Games', 'Mobile'],
-        'Fitness': ['Health', 'Sports', 'Lifestyle', 'Wellness', 'Personal Development'],
-        'Animals': ['Nature', 'Photography', 'General', 'Pets'],
-        'General': ['Lifestyle', 'Entertainment', 'Photography', 'News'],
-        'Politics': ['News', 'Government', 'History', 'Law'],
-        'History': ['Politics', 'Education', 'Books', 'Law'],
-        'Finance': ['Business', 'Investing', 'Crypto', 'Real Estate'],
-        'Automotive': ['Technology', 'Travel', 'Sports'],
-        'Parenting': ['Relationships', 'Education', 'Lifestyle'],
-        'Relationships': ['Parenting', 'Lifestyle', 'Personal Development'],
-        'Spirituality': ['Personal Development', 'Wellness', 'Mental Health'],
-        'Environment': ['Nature', 'Gardening', 'Science'],
-        'DIY': ['Home', 'Crafts', 'Gardening'],
-        'Home': ['DIY', 'Gardening', 'Lifestyle'],
-        'Gardening': ['Nature', 'Home', 'DIY'],
-        'Movies': ['Entertainment', 'Art', 'Books'],
-        'Books': ['Education', 'Movies', 'Comics'],
-        'Comics': ['Art', 'Books', 'Anime', 'Cartoons'],
-        'Memes': ['Entertainment', 'Comics', 'Cartoons'],
-        'Programming': ['Technology', 'Data Science', 'Machine Learning'],
-        'Startups': ['Business', 'Technology', 'Marketing'],
-        'Marketing': ['Business', 'Startups', 'Productivity'],
-        'Real Estate': ['Finance', 'Business', 'Home'],
-        'Travel Tips': ['Travel', 'Events', 'Lifestyle'],
-        'Events': ['Entertainment', 'Travel', 'Sports'],
-        'Podcasts': ['Music', 'Entertainment', 'Personal Development'],
-        'Wellness': ['Health', 'Fitness', 'Mental Health'],
-        'Mental Health': ['Wellness', 'Health', 'Personal Development'],
-        'Personal Development': ['Education', 'Wellness', 'Productivity'],
-        'Productivity': ['Personal Development', 'Career', 'Education'],
-        'Career': ['Productivity', 'Education', 'Business'],
-        'Pets': ['Animals', 'Lifestyle', 'Health'],
-        'Crafts': ['DIY', 'Art', 'Home'],
-        'Beauty': ['Fashion', 'Lifestyle', 'Shopping'],
-        'Shopping': ['Fashion', 'Beauty', 'Lifestyle'],
-        'Investing': ['Finance', 'Business', 'Crypto'],
-        'Crypto': ['Finance', 'Investing', 'Technology'],
-        'Astronomy': ['Science', 'Physics', 'Mathematics'],
-        'Mathematics': ['Science', 'Education', 'Physics'],
-        'Physics': ['Science', 'Mathematics', 'Astronomy'],
-        'Chemistry': ['Science', 'Biology', 'Medicine'],
-        'Biology': ['Science', 'Medicine', 'Chemistry'],
-        'Medicine': ['Health', 'Biology', 'Science'],
-        'Law': ['Politics', 'Government', 'History'],
-        'Government': ['Politics', 'Law', 'History'],
-        'Anime': ['Comics', 'Cartoons', 'Art'],
-        'Cartoons': ['Comics', 'Anime', 'Memes'],
-        'Board Games': ['Gaming', 'Entertainment', 'Comics'],
-        'Mobile': ['Technology', 'Gaming', 'Web'],
-        'Web': ['Technology', 'Programming', 'Cloud'],
-        'Cloud': ['Technology', 'Web', 'DevOps'],
-        'DevOps': ['Cloud', 'Technology', 'Programming'],
-        'Data Science': ['Programming', 'Machine Learning', 'Artificial Intelligence'],
-        'Machine Learning': ['Artificial Intelligence', 'Data Science', 'Programming'],
-        'Artificial Intelligence': ['Machine Learning', 'Technology', 'Data Science'],
+        'Photorealistic': ['General', 'Vintage', 'Classical Art'],
+        'Cyberpunk': ['Sci-Fi', 'Vaporwave', 'Steampunk', 'General'],
+        'Fantasy': ['Sci-Fi', 'Surrealism', 'Anime', 'General'],
+        'Sci-Fi': ['Cyberpunk', 'Fantasy', 'Steampunk', 'General'],
+        'Anime': ['Pop Art', 'Fantasy', 'Surrealism', 'General'],
+        'Classical Art': ['Impressionism', 'Vintage', 'Photorealistic', 'General'],
+        'Impressionism': ['Classical Art', 'Abstract', 'Surrealism', 'General'],
+        'Abstract': ['Surrealism', 'Impressionism', 'Minimalist', 'General'],
+        'Surrealism': ['Abstract', 'Fantasy', 'Anime', 'General'],
+        'Pop Art': ['Anime', 'Vaporwave', 'Minimalist', 'General'],
+        'Minimalist': ['Abstract', 'Pop Art', 'General'],
+        'Steampunk': ['Cyberpunk', 'Sci-Fi', 'Gothic', 'General'],
+        'Gothic': ['Steampunk', 'Vintage', 'General'],
+        'Vaporwave': ['Pop Art', 'Cyberpunk', 'Vintage', 'General'],
+        'Vintage': ['Classical Art', 'Photorealistic', 'Vaporwave', 'General'],
+        'General': ['Photorealistic', 'Classical Art', 'Anime', 'Fantasy'],
     };
     return similarityMap[category] || ['General'];
 }

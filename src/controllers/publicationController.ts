@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import { Op, fn, col } from 'sequelize';
+import db from '../config/database';
+import { Op } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
 import { Publication } from '../models/Publication';
@@ -8,7 +7,6 @@ import { Subscription } from '../models/Subscription';
 import { LikedPublication } from '../models/LikedPublication';
 import { Comment } from '../models/Comment'; // Import Comment
 import { classifyContent, getSimilarCategories, PublicationCategory } from '../services/classificationService';
-import db from '../config/database';
 
 // --- Get Single Publication by ID with full comment tree ---
 export const getPublicationById = async (req: Request, res: Response) => {
@@ -22,44 +20,44 @@ export const getPublicationById = async (req: Request, res: Response) => {
                     model: User,
                     as: 'author',
                     attributes: ['id', 'username', 'fullname', 'avatar']
-                },
-                {
-                    model: Comment,
-                    as: 'comments',
-                    where: { parentId: null }, // Fetch only top-level comments
-                    required: false, // Use LEFT JOIN to get publications even with no comments
-                    include: [
-                        {
-                            model: User, as: 'author',
-                            attributes: ['id', 'username', 'fullname', 'avatar']
-                        },
-                        {
-                            model: Comment, as: 'replies',
-                            required: false,
-                            include: [{
-                                model: User, as: 'author',
-                                attributes: ['id', 'username', 'fullname', 'avatar']
-                            }]
-                        }
-                    ],
                 }
             ],
-            order: [
-                // Order comments and their replies by creation date
-                [col('comments.createdAt'), 'ASC'],
-                [col('comments.replies.createdAt'), 'ASC'],
-            ]
         });
 
         if (!publication) {
             return res.status(404).json({ message: 'Publication not found' });
         }
 
+        // Fetch comments separately with full hierarchy
+        const topLevelComments = await Comment.findAll({
+            where: { publicationId: publication.id, parentId: null },
+            include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+            order: [['createdAt', 'ASC']],
+        });
+
+        const fetchReplies = async (comment: Comment) => {
+            const replies = await Comment.findAll({
+                where: { parentId: comment.id },
+                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['createdAt', 'ASC']]
+            });
+
+            for (const reply of replies) {
+                (reply as any).dataValues.replies = await fetchReplies(reply);
+            }
+            return replies;
+        };
+
+        for (const comment of topLevelComments) {
+            (comment as any).dataValues.replies = await fetchReplies(comment);
+        }
+
+        const publicationJson = publication.toJSON();
+
         // Add isLiked and isFollowing info
         const isFollowing = await Subscription.findOne({ where: { followerId: userId, followingId: publication.userId } });
         const isLiked = await LikedPublication.findOne({ where: { userId, publicationId: publication.id } });
 
-        const publicationJson = publication.toJSON();
         const publicationWithExtras = {
             ...publicationJson,
             isFollowing: !!isFollowing,
@@ -73,7 +71,6 @@ export const getPublicationById = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-
 
 // --- The rest of the publication controller remains largely the same ---
 // Helper function to add extra info (likeCount and commentCount are now on the model)
@@ -137,8 +134,23 @@ export const createPublication = async (req: Request, res: Response) => {
 export const getAllPublications = async (req: Request, res: Response) => {
     try {
         const userId = req.user.id;
+        const { sortBy, category } = req.query;
+
+        let order: any = [['createdAt', 'DESC']];
+        if (sortBy === 'mostLiked') {
+            order = [['likeCount', 'DESC']];
+        } else if (sortBy === 'mostCommented') {
+            order = [['commentCount', 'DESC']];
+        }
+
+        let whereClause: any = {};
+        if (category) {
+            whereClause.category = category;
+        }
+
         const publications = await Publication.findAll({
-            order: [['createdAt', 'DESC']],
+            where: whereClause,
+            order: order,
             include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }]
         });
 
@@ -147,6 +159,67 @@ export const getAllPublications = async (req: Request, res: Response) => {
         res.json(publicationsWithInfo);
     } catch (error) {
         console.error('Get all publications error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getRecommendedPublications = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = (page - 1) * limit;
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
+        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
+        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
+        const userInterests = user.interests || [];
+        let recommendedCategories: string[] = [];
+        if (userInterests.length > 0) {
+            const allRelevantCategories = new Set<string>(userInterests);
+            userInterests.forEach(interest => {
+                const similar = getSimilarCategories(interest as PublicationCategory);
+                similar.forEach(cat => allRelevantCategories.add(cat));
+            });
+            recommendedCategories = Array.from(allRelevantCategories);
+        }
+        let recommendations: Publication[] = [];
+        if (recommendedCategories.length > 0) {
+            recommendations = await Publication.findAll({
+                where: {
+                    category: { [Op.in]: recommendedCategories },
+                    id: { [Op.notIn]: excludedPublicationIds },
+                    userId: { [Op.ne]: userId }
+                },
+                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [
+                    ['likeCount', 'DESC'], // Prioritize most liked
+                    ['createdAt', 'DESC']
+                ],
+                limit,
+                offset
+            });
+        }
+        if (recommendations.length < limit) {
+            const existingIds = recommendations.map(p => p.id);
+            const fallbackLimit = limit - recommendations.length;
+            const fallbackOffset = offset > 0 ? 0 : offset;
+            const fallbackPublications = await Publication.findAll({
+                where: {
+                    id: { [Op.notIn]: [...excludedPublicationIds, ...existingIds] },
+                    userId: { [Op.ne]: userId }
+                },
+                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
+                limit: fallbackLimit, offset: fallbackOffset
+            });
+            recommendations.push(...fallbackPublications);
+        }
+        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
+        res.json(finalRecommendations);
+    } catch (error) {
+        console.error('Get recommended publications error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -234,63 +307,6 @@ export const getMyLikedPublications = async (req: Request, res: Response) => {
         res.json(publicationsWithInfo);
     } catch (error) {
         console.error('Get liked publications error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-export const getRecommendedPublications = async (req: Request, res: Response) => {
-    try {
-        const userId = req.user.id;
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 20;
-        const offset = (page - 1) * limit;
-        const user = await User.findByPk(userId);
-        if (!user) return res.status(404).json({ message: 'User not found' });
-        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
-        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
-        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
-        const userInterests = user.interests || [];
-        let recommendedCategories: string[] = [];
-        if (userInterests.length > 0) {
-            const allRelevantCategories = new Set<string>(userInterests);
-            userInterests.forEach(interest => {
-                const similar = getSimilarCategories(interest as PublicationCategory);
-                similar.forEach(cat => allRelevantCategories.add(cat));
-            });
-            recommendedCategories = Array.from(allRelevantCategories);
-        }
-        let recommendations: Publication[] = [];
-        if (recommendedCategories.length > 0) {
-            recommendations = await Publication.findAll({
-                where: {
-                    category: { [Op.in]: recommendedCategories },
-                    id: { [Op.notIn]: excludedPublicationIds },
-                    userId: { [Op.ne]: userId }
-                },
-                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['likeCount', 'DESC'], ['createdAt', 'DESC']],
-                limit, offset
-            });
-        }
-        if (recommendations.length < limit) {
-            const existingIds = recommendations.map(p => p.id);
-            const fallbackLimit = limit - recommendations.length;
-            const fallbackOffset = offset > 0 ? 0 : offset;
-            const fallbackPublications = await Publication.findAll({
-                where: {
-                    id: { [Op.notIn]: [...excludedPublicationIds, ...existingIds] },
-                    userId: { [Op.ne]: userId }
-                },
-                include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
-                limit: fallbackLimit, offset: fallbackOffset
-            });
-            recommendations.push(...fallbackPublications);
-        }
-        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
-        res.json(finalRecommendations);
-    } catch (error) {
-        console.error('Get recommended publications error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

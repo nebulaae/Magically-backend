@@ -16,14 +16,15 @@ const classificationService_1 = require("./services/classificationService");
 // Import routes
 const auth_1 = __importDefault(require("./routes/auth"));
 const user_1 = __importDefault(require("./routes/user"));
-const publication_1 = __importDefault(require("./routes/publication")); // New: Import publication routes
+const publication_1 = __importDefault(require("./routes/publication"));
+const generation_1 = __importDefault(require("./routes/generation"));
 dotenv_1.default.config();
 // Initialize express app
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Middleware
 app.use((0, cors_1.default)({
-    origin: "*",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
 }));
 app.use(express_1.default.json());
@@ -36,6 +37,7 @@ app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 app.use('/api/auth', auth_1.default);
 app.use('/api/publications', publication_1.default);
 app.use('/api/users', user_1.default);
+app.use('/api/ai', generation_1.default);
 // Health check route
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

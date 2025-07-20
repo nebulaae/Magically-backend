@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import db from '../config/database';
 import type { Publication } from './Publication';
-import type { Comment } from './Comment'; // Import the Comment type
+import type { Comment } from './Comment';
 import {
     Model,
     DataTypes,
@@ -14,15 +14,27 @@ import {
 // --- User Model Attributes ---
 export interface UserAttributes {
     id: string;
-    fullname: string;
-    username: string;
+    fullname?: string;
+    username?: string;
     email: string;
     bio?: string;
-    password: string;
+    password?: string;
     avatar?: string;
     interests?: string[];
+    verified: boolean;
+    otp?: string;
+    otpExpires?: Date;
+    passwordResetToken?: string;
+    passwordResetTokenExpires?: Date;
     createdAt?: Date;
     updatedAt?: Date;
+    gallery?: Array<{
+        originalPath: string;
+        generatedUrl: string;
+        prompt: string;
+        style: string;
+        createdAt: Date;
+    }>;
 }
 
 // --- User Model Class ---
@@ -35,13 +47,18 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public password!: string;
     public avatar?: string;
     public interests?: string[];
+    public verified!: boolean;
+    public otp?: string;
+    public otpExpires?: Date;
+    public passwordResetToken?: string;
+    public passwordResetTokenExpires?: Date;
 
     // Timestamps
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 
-    // Instance method to compare passwords
     public async comparePassword(candidatePassword: string): Promise<boolean> {
+        if (!this.password) return false;
         return bcrypt.compare(candidatePassword, this.password);
     }
 
@@ -63,6 +80,15 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public getLikedComments!: BelongsToManyGetAssociationsMixin<Comment>;
     public addLikedComment!: BelongsToManyAddAssociationMixin<Comment, string>;
     public removeLikedComment!: BelongsToManyRemoveAssociationMixin<Comment, string>;
+
+    // Gallery
+    public gallery?: Array<{
+        originalPath: string;
+        generatedUrl: string;
+        prompt: string;
+        style: string;
+        createdAt: Date;
+    }>;
 }
 
 // --- Initialize User Model ---
@@ -75,20 +101,18 @@ User.init(
         },
         fullname: {
             type: DataTypes.STRING(32),
-            allowNull: false,
+            allowNull: true,
         },
         username: {
             type: DataTypes.STRING(16),
-            allowNull: false,
+            allowNull: true,
             unique: true,
         },
         email: {
             type: DataTypes.STRING(50),
             allowNull: false,
             unique: true,
-            validate: {
-                isEmail: true,
-            },
+            validate: { isEmail: true },
         },
         bio: {
             type: DataTypes.STRING(72),
@@ -96,7 +120,7 @@ User.init(
         },
         password: {
             type: DataTypes.STRING(60),
-            allowNull: false,
+            allowNull: true,
         },
         avatar: {
             type: DataTypes.STRING,
@@ -104,6 +128,32 @@ User.init(
         },
         interests: {
             type: DataTypes.ARRAY(DataTypes.STRING),
+            allowNull: true,
+            defaultValue: [],
+        },
+        verified: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
+        otp: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        otpExpires: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        passwordResetToken: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        passwordResetTokenExpires: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        gallery: {
+            type: DataTypes.JSONB,
             allowNull: true,
             defaultValue: [],
         },
@@ -120,7 +170,7 @@ User.init(
                 }
             },
             beforeUpdate: async (user: User) => {
-                if (user.changed('password')) {
+                if (user.changed('password') && user.password) {
                     const salt = await bcrypt.genSalt(10);
                     user.password = await bcrypt.hash(user.password, salt);
                 }

@@ -18,7 +18,8 @@ import {
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
-import publicationRoutes from './routes/publication'; // New: Import publication routes
+import publicationRoutes from './routes/publication';
+import generationRoutes from './routes/generation';
 
 dotenv.config()
 
@@ -29,7 +30,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: "*",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
@@ -46,6 +47,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/publications', publicationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/ai', generationRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

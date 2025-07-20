@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRecommendedPublications = exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.updatePublication = exports.getAllPublications = exports.createPublication = exports.getPublicationById = void 0;
+exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.updatePublication = exports.getRecommendedPublications = exports.getAllPublications = exports.createPublication = exports.getPublicationById = void 0;
+const database_1 = __importDefault(require("../config/database"));
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
 const Publication_1 = require("../models/Publication");
@@ -11,7 +12,6 @@ const Subscription_1 = require("../models/Subscription");
 const LikedPublication_1 = require("../models/LikedPublication");
 const Comment_1 = require("../models/Comment"); // Import Comment
 const classificationService_1 = require("../services/classificationService");
-const database_1 = __importDefault(require("../config/database"));
 // --- Get Single Publication by ID with full comment tree ---
 const getPublicationById = async (req, res) => {
     try {
@@ -23,41 +23,36 @@ const getPublicationById = async (req, res) => {
                     model: User_1.User,
                     as: 'author',
                     attributes: ['id', 'username', 'fullname', 'avatar']
-                },
-                {
-                    model: Comment_1.Comment,
-                    as: 'comments',
-                    where: { parentId: null }, // Fetch only top-level comments
-                    required: false, // Use LEFT JOIN to get publications even with no comments
-                    include: [
-                        {
-                            model: User_1.User, as: 'author',
-                            attributes: ['id', 'username', 'fullname', 'avatar']
-                        },
-                        {
-                            model: Comment_1.Comment, as: 'replies',
-                            required: false,
-                            include: [{
-                                    model: User_1.User, as: 'author',
-                                    attributes: ['id', 'username', 'fullname', 'avatar']
-                                }]
-                        }
-                    ],
                 }
             ],
-            order: [
-                // Order comments and their replies by creation date
-                [(0, sequelize_1.col)('comments.createdAt'), 'ASC'],
-                [(0, sequelize_1.col)('comments.replies.createdAt'), 'ASC'],
-            ]
         });
         if (!publication) {
             return res.status(404).json({ message: 'Publication not found' });
         }
+        // Fetch comments separately with full hierarchy
+        const topLevelComments = await Comment_1.Comment.findAll({
+            where: { publicationId: publication.id, parentId: null },
+            include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+            order: [['createdAt', 'ASC']],
+        });
+        const fetchReplies = async (comment) => {
+            const replies = await Comment_1.Comment.findAll({
+                where: { parentId: comment.id },
+                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['createdAt', 'ASC']]
+            });
+            for (const reply of replies) {
+                reply.dataValues.replies = await fetchReplies(reply);
+            }
+            return replies;
+        };
+        for (const comment of topLevelComments) {
+            comment.dataValues.replies = await fetchReplies(comment);
+        }
+        const publicationJson = publication.toJSON();
         // Add isLiked and isFollowing info
         const isFollowing = await Subscription_1.Subscription.findOne({ where: { followerId: userId, followingId: publication.userId } });
         const isLiked = await LikedPublication_1.LikedPublication.findOne({ where: { userId, publicationId: publication.id } });
-        const publicationJson = publication.toJSON();
         const publicationWithExtras = Object.assign(Object.assign({}, publicationJson), { isFollowing: !!isFollowing, isLiked: !!isLiked });
         res.json(publicationWithExtras);
     }
@@ -82,15 +77,6 @@ const addExtraInfoToPublications = async (publications, userId) => {
         where: { userId, publicationId: { [sequelize_1.Op.in]: publicationIds } },
     });
     const likedPublicationIds = new Set(liked.map(like => like.publicationId));
-    const commentCounts = await Comment_1.Comment.findAll({
-        attributes: ['publicationId', [(0, sequelize_1.fn)('COUNT', (0, sequelize_1.col)('id')), 'count']],
-        where: { publicationId: { [sequelize_1.Op.in]: publicationIds } },
-        group: ['publicationId']
-    });
-    const commentCountMap = new Map();
-    commentCounts.forEach((row) => {
-        commentCountMap.set(row.publicationId, parseInt(row.get('count'), 10));
-    });
     return publications.map(p => {
         const publicationJson = p.toJSON();
         return Object.assign(Object.assign({}, publicationJson), { isFollowing: followingIds.has(p.userId), isLiked: likedPublicationIds.has(p.id) });
@@ -127,8 +113,21 @@ exports.createPublication = createPublication;
 const getAllPublications = async (req, res) => {
     try {
         const userId = req.user.id;
+        const { sortBy, category } = req.query;
+        let order = [['createdAt', 'DESC']];
+        if (sortBy === 'mostLiked') {
+            order = [['likeCount', 'DESC']];
+        }
+        else if (sortBy === 'mostCommented') {
+            order = [['commentCount', 'DESC']];
+        }
+        let whereClause = {};
+        if (category) {
+            whereClause.category = category;
+        }
         const publications = await Publication_1.Publication.findAll({
-            order: [['createdAt', 'DESC']],
+            where: whereClause,
+            order: order,
             include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }]
         });
         const publicationsWithInfo = await addExtraInfoToPublications(publications, userId);
@@ -140,6 +139,69 @@ const getAllPublications = async (req, res) => {
     }
 };
 exports.getAllPublications = getAllPublications;
+const getRecommendedPublications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+        const user = await User_1.User.findByPk(userId);
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
+        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
+        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
+        const userInterests = user.interests || [];
+        let recommendedCategories = [];
+        if (userInterests.length > 0) {
+            const allRelevantCategories = new Set(userInterests);
+            userInterests.forEach(interest => {
+                const similar = (0, classificationService_1.getSimilarCategories)(interest);
+                similar.forEach(cat => allRelevantCategories.add(cat));
+            });
+            recommendedCategories = Array.from(allRelevantCategories);
+        }
+        let recommendations = [];
+        if (recommendedCategories.length > 0) {
+            recommendations = await Publication_1.Publication.findAll({
+                where: {
+                    category: { [sequelize_1.Op.in]: recommendedCategories },
+                    id: { [sequelize_1.Op.notIn]: excludedPublicationIds },
+                    userId: { [sequelize_1.Op.ne]: userId }
+                },
+                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [
+                    ['likeCount', 'DESC'], // Prioritize most liked
+                    ['createdAt', 'DESC']
+                ],
+                limit,
+                offset
+            });
+        }
+        if (recommendations.length < limit) {
+            const existingIds = recommendations.map(p => p.id);
+            const fallbackLimit = limit - recommendations.length;
+            const fallbackOffset = offset > 0 ? 0 : offset;
+            const fallbackPublications = await Publication_1.Publication.findAll({
+                where: {
+                    id: { [sequelize_1.Op.notIn]: [...excludedPublicationIds, ...existingIds] },
+                    userId: { [sequelize_1.Op.ne]: userId }
+                },
+                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
+                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
+                limit: fallbackLimit, offset: fallbackOffset
+            });
+            recommendations.push(...fallbackPublications);
+        }
+        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
+        res.json(finalRecommendations);
+    }
+    catch (error) {
+        console.error('Get recommended publications error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.getRecommendedPublications = getRecommendedPublications;
 const updatePublication = async (req, res) => {
     try {
         const { publicationId } = req.params;
@@ -238,63 +300,4 @@ const getMyLikedPublications = async (req, res) => {
     }
 };
 exports.getMyLikedPublications = getMyLikedPublications;
-const getRecommendedPublications = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = (page - 1) * limit;
-        const user = await User_1.User.findByPk(userId);
-        if (!user)
-            return res.status(404).json({ message: 'User not found' });
-        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
-        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
-        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
-        const userInterests = user.interests || [];
-        let recommendedCategories = [];
-        if (userInterests.length > 0) {
-            const allRelevantCategories = new Set(userInterests);
-            userInterests.forEach(interest => {
-                const similar = (0, classificationService_1.getSimilarCategories)(interest);
-                similar.forEach(cat => allRelevantCategories.add(cat));
-            });
-            recommendedCategories = Array.from(allRelevantCategories);
-        }
-        let recommendations = [];
-        if (recommendedCategories.length > 0) {
-            recommendations = await Publication_1.Publication.findAll({
-                where: {
-                    category: { [sequelize_1.Op.in]: recommendedCategories },
-                    id: { [sequelize_1.Op.notIn]: excludedPublicationIds },
-                    userId: { [sequelize_1.Op.ne]: userId }
-                },
-                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['likeCount', 'DESC'], ['createdAt', 'DESC']],
-                limit, offset
-            });
-        }
-        if (recommendations.length < limit) {
-            const existingIds = recommendations.map(p => p.id);
-            const fallbackLimit = limit - recommendations.length;
-            const fallbackOffset = offset > 0 ? 0 : offset;
-            const fallbackPublications = await Publication_1.Publication.findAll({
-                where: {
-                    id: { [sequelize_1.Op.notIn]: [...excludedPublicationIds, ...existingIds] },
-                    userId: { [sequelize_1.Op.ne]: userId }
-                },
-                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
-                limit: fallbackLimit, offset: fallbackOffset
-            });
-            recommendations.push(...fallbackPublications);
-        }
-        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
-        res.json(finalRecommendations);
-    }
-    catch (error) {
-        console.error('Get recommended publications error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-exports.getRecommendedPublications = getRecommendedPublications;
 //# sourceMappingURL=publicationController.js.map
