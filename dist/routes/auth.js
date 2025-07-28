@@ -27,27 +27,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const auth_1 = require("../middleware/auth");
 const authController = __importStar(require("../controllers/authController"));
+const auth_1 = require("../middleware/auth");
+const utils_1 = require("../lib/utils");
 const router = express_1.default.Router();
-// Helper to wrap async route handlers
-const asyncHandler = (fn) => (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-};
 // Multi-step registration routes
-router.post('/register-step-1', asyncHandler(authController.registerStep1));
-router.post('/register-step-2', asyncHandler(authController.registerStep2));
-router.post('/register-step-3', asyncHandler(authController.registerStep3));
-// Register new user
-// router.post('/register', asyncHandler(authController.register));
+router.post('/register-step-1', (0, utils_1.asyncHandler)(authController.registerStep1));
+router.post('/register-step-2', (0, utils_1.asyncHandler)(authController.registerStep2));
+router.post('/register-step-3', (0, utils_1.asyncHandler)(authController.registerStep3));
 // Login user
-router.post('/login', asyncHandler(authController.login));
+router.post('/login', (0, utils_1.asyncHandler)(authController.login));
 // Logout user
-router.post('/logout', asyncHandler(authController.logout));
+router.post('/logout', (0, utils_1.asyncHandler)(authController.logout));
 // Get current authenticated user
-router.get('/me', auth_1.auth, asyncHandler(authController.getMe));
+router.get('/me', auth_1.auth, (0, utils_1.asyncHandler)(authController.getMe));
 // Password Management
-router.post('/forgot-password', asyncHandler(authController.forgotPassword));
-router.post('/reset-password/:token', asyncHandler(authController.resetPassword));
+router.post('/forgot-password', (0, utils_1.asyncHandler)(authController.forgotPassword));
+router.post('/reset-password/:token', (0, utils_1.asyncHandler)(authController.resetPassword));
 exports.default = router;
 //# sourceMappingURL=auth.js.map

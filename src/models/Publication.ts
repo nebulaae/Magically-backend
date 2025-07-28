@@ -16,9 +16,10 @@ export interface PublicationAttributes {
     userId: string;
     content: string;
     imageUrl?: string;
+    videoUrl?: string; // [NEW] For video content
     category?: string;
     likeCount: number;
-    commentCount: number; // New: Comment count
+    commentCount: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -29,6 +30,7 @@ export class Publication extends Model<PublicationAttributes> implements Publica
     public userId!: string;
     public content!: string;
     public imageUrl?: string;
+    public videoUrl?: string; // [NEW]
     public category?: string;
     public likeCount!: number;
     public commentCount!: number;
@@ -63,6 +65,10 @@ Publication.init(
             allowNull: false,
         },
         imageUrl: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        videoUrl: { // [NEW]
             type: DataTypes.STRING,
             allowNull: true,
         },

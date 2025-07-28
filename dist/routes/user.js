@@ -27,38 +27,32 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const auth_1 = require("../middleware/auth");
-const upload_1 = require("../middleware/upload");
 const userController = __importStar(require("../controllers/userController"));
+const auth_1 = require("../middleware/auth");
+const utils_1 = require("../lib/utils");
+const upload_1 = require("../middleware/upload");
 const router = express_1.default.Router();
-// Helper to wrap async route handlers
-const asyncHandler = (fn) => (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-};
-// --- Public Routes ---
 // Search for users
-router.get('/search/users', auth_1.auth, asyncHandler(userController.searchUsers));
-// --- Authenticated Routes ---
+router.get('/search/users', auth_1.auth, (0, utils_1.asyncHandler)(userController.searchUsers));
 // Get your own detailed profile
-router.get('/me/profile', auth_1.auth, asyncHandler(userController.getMe));
+router.get('/me/profile', auth_1.auth, (0, utils_1.asyncHandler)(userController.getMe));
 // Get your own followings
-router.get('/me/profile/followers', auth_1.auth, asyncHandler(userController.getMyFollowers));
+router.get('/me/profile/followers', auth_1.auth, (0, utils_1.asyncHandler)(userController.getMyFollowers));
 // Get your own followers
-router.get('/me/profile/following', auth_1.auth, asyncHandler(userController.getMyFollowings));
+router.get('/me/profile/following', auth_1.auth, (0, utils_1.asyncHandler)(userController.getMyFollowings));
 // Update your profile
-router.put('/me/profile', auth_1.auth, asyncHandler(userController.updateProfile));
+router.put('/me/profile', auth_1.auth, (0, utils_1.asyncHandler)(userController.updateProfile));
 // Update your avatar
-router.put('/me/avatar', auth_1.auth, upload_1.uploadAvatar, asyncHandler(userController.updateAvatar));
-// --- User specific routes (by username or ID) ---
+router.put('/me/avatar', auth_1.auth, upload_1.uploadAvatar, (0, utils_1.asyncHandler)(userController.updateAvatar));
 // Get a user's profile by username (must be after /me and /search routes)
-router.get('/:username', auth_1.auth, asyncHandler(userController.getProfile));
+router.get('/:username', auth_1.auth, (0, utils_1.asyncHandler)(userController.getProfile));
 // Get a user's followers
-router.get('/:username/followers', auth_1.auth, asyncHandler(userController.getFollowers));
+router.get('/:username/followers', auth_1.auth, (0, utils_1.asyncHandler)(userController.getFollowers));
 // Get a user's following
-router.get('/:username/following', auth_1.auth, asyncHandler(userController.getFollowing));
+router.get('/:username/following', auth_1.auth, (0, utils_1.asyncHandler)(userController.getFollowing));
 // Subscribe to (follow) a user by their ID
-router.post('/:userId/subscribe', auth_1.auth, asyncHandler(userController.subscribe));
+router.post('/:userId/subscribe', auth_1.auth, (0, utils_1.asyncHandler)(userController.subscribe));
 // Unsubscribe from (unfollow) a user by their ID
-router.delete('/:userId/unsubscribe', auth_1.auth, asyncHandler(userController.unsubscribe));
+router.delete('/:userId/unsubscribe', auth_1.auth, (0, utils_1.asyncHandler)(userController.unsubscribe));
 exports.default = router;
 //# sourceMappingURL=user.js.map

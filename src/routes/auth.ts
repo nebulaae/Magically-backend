@@ -1,21 +1,15 @@
 import express from 'express';
-import { auth } from '../middleware/auth';
 import * as authController from '../controllers/authController';
 
-const router = express.Router();
+import { auth } from '../middleware/auth';
+import { asyncHandler } from '../lib/utils';
 
-// Helper to wrap async route handlers
-const asyncHandler = (fn: any) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
-	Promise.resolve(fn(req, res, next)).catch(next);
-};
+const router = express.Router();
 
 // Multi-step registration routes
 router.post('/register-step-1', asyncHandler(authController.registerStep1));
 router.post('/register-step-2', asyncHandler(authController.registerStep2));
 router.post('/register-step-3', asyncHandler(authController.registerStep3));
-
-// Register new user
-// router.post('/register', asyncHandler(authController.register));
 
 // Login user
 router.post('/login', asyncHandler(authController.login));

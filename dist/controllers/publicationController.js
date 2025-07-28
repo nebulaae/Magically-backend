@@ -3,15 +3,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.updatePublication = exports.getRecommendedPublications = exports.getAllPublications = exports.createPublication = exports.getPublicationById = void 0;
+exports.getMyLikedPublications = exports.unlikePublication = exports.likePublication = exports.updatePublication = exports.getAllPublications = exports.createPublication = exports.getPublicationById = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
+const Comment_1 = require("../models/Comment");
 const Publication_1 = require("../models/Publication");
 const Subscription_1 = require("../models/Subscription");
 const LikedPublication_1 = require("../models/LikedPublication");
-const Comment_1 = require("../models/Comment"); // Import Comment
-const classificationService_1 = require("../services/classificationService");
+const utils_1 = require("../lib/utils");
 // --- Get Single Publication by ID with full comment tree ---
 const getPublicationById = async (req, res) => {
     try {
@@ -35,19 +35,8 @@ const getPublicationById = async (req, res) => {
             include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
             order: [['createdAt', 'ASC']],
         });
-        const fetchReplies = async (comment) => {
-            const replies = await Comment_1.Comment.findAll({
-                where: { parentId: comment.id },
-                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['createdAt', 'ASC']]
-            });
-            for (const reply of replies) {
-                reply.dataValues.replies = await fetchReplies(reply);
-            }
-            return replies;
-        };
         for (const comment of topLevelComments) {
-            comment.dataValues.replies = await fetchReplies(comment);
+            comment.dataValues.replies = await (0, utils_1.fetchReplies)(comment);
         }
         const publicationJson = publication.toJSON();
         // Add isLiked and isFollowing info
@@ -63,7 +52,6 @@ const getPublicationById = async (req, res) => {
 };
 exports.getPublicationById = getPublicationById;
 // --- The rest of the publication controller remains largely the same ---
-// Helper function to add extra info (likeCount and commentCount are now on the model)
 const addExtraInfoToPublications = async (publications, userId) => {
     if (publications.length === 0)
         return [];
@@ -93,12 +81,11 @@ const createPublication = async (req, res) => {
         if (!content && !imageUrl) {
             return res.status(400).json({ message: 'Publication must have content or an image.' });
         }
-        const category = await (0, classificationService_1.classifyContent)(content, imageUrl);
         const publication = await Publication_1.Publication.create({
             userId,
             content,
             imageUrl,
-            category,
+            category: "Not defined",
             likeCount: 0,
             commentCount: 0
         });
@@ -139,69 +126,6 @@ const getAllPublications = async (req, res) => {
     }
 };
 exports.getAllPublications = getAllPublications;
-const getRecommendedPublications = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = (page - 1) * limit;
-        const user = await User_1.User.findByPk(userId);
-        if (!user)
-            return res.status(404).json({ message: 'User not found' });
-        const myPublicationIds = (await user.getPublications({ attributes: ['id'] })).map(p => p.id);
-        const likedPublicationIds = (await user.getLikedPublications({ attributes: ['id'] })).map(p => p.id);
-        const excludedPublicationIds = [...new Set([...myPublicationIds, ...likedPublicationIds])];
-        const userInterests = user.interests || [];
-        let recommendedCategories = [];
-        if (userInterests.length > 0) {
-            const allRelevantCategories = new Set(userInterests);
-            userInterests.forEach(interest => {
-                const similar = (0, classificationService_1.getSimilarCategories)(interest);
-                similar.forEach(cat => allRelevantCategories.add(cat));
-            });
-            recommendedCategories = Array.from(allRelevantCategories);
-        }
-        let recommendations = [];
-        if (recommendedCategories.length > 0) {
-            recommendations = await Publication_1.Publication.findAll({
-                where: {
-                    category: { [sequelize_1.Op.in]: recommendedCategories },
-                    id: { [sequelize_1.Op.notIn]: excludedPublicationIds },
-                    userId: { [sequelize_1.Op.ne]: userId }
-                },
-                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [
-                    ['likeCount', 'DESC'], // Prioritize most liked
-                    ['createdAt', 'DESC']
-                ],
-                limit,
-                offset
-            });
-        }
-        if (recommendations.length < limit) {
-            const existingIds = recommendations.map(p => p.id);
-            const fallbackLimit = limit - recommendations.length;
-            const fallbackOffset = offset > 0 ? 0 : offset;
-            const fallbackPublications = await Publication_1.Publication.findAll({
-                where: {
-                    id: { [sequelize_1.Op.notIn]: [...excludedPublicationIds, ...existingIds] },
-                    userId: { [sequelize_1.Op.ne]: userId }
-                },
-                include: [{ model: User_1.User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-                order: [['createdAt', 'DESC'], ['likeCount', 'DESC']],
-                limit: fallbackLimit, offset: fallbackOffset
-            });
-            recommendations.push(...fallbackPublications);
-        }
-        const finalRecommendations = await addExtraInfoToPublications(recommendations, userId);
-        res.json(finalRecommendations);
-    }
-    catch (error) {
-        console.error('Get recommended publications error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-exports.getRecommendedPublications = getRecommendedPublications;
 const updatePublication = async (req, res) => {
     try {
         const { publicationId } = req.params;
@@ -213,9 +137,6 @@ const updatePublication = async (req, res) => {
         if (publication.userId !== userId)
             return res.status(403).json({ message: 'You are not authorized to edit this publication' });
         publication.content = content || publication.content;
-        if (content) {
-            publication.category = await (0, classificationService_1.classifyContent)(content, publication.imageUrl);
-        }
         await publication.save();
         res.json({ message: 'Publication updated successfully', publication });
     }
@@ -245,6 +166,7 @@ const likePublication = async (req, res) => {
                     await user.save({ transaction: t });
                 }
             }
+            await (0, utils_1.handleUserAction)(user, 10, t);
         });
         res.status(200).json({ message: 'Publication liked successfully' });
     }

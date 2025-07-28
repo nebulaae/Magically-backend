@@ -33,6 +33,10 @@ Publication.init({
         type: sequelize_1.DataTypes.STRING,
         allowNull: true,
     },
+    videoUrl: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true,
+    },
     category: {
         type: sequelize_1.DataTypes.STRING,
         allowNull: true,

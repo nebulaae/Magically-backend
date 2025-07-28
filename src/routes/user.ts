@@ -1,20 +1,15 @@
 import express from 'express';
-import { auth } from '../middleware/auth';
-import { uploadAvatar } from '../middleware/upload';
 import * as userController from '../controllers/userController';
+
+import { auth } from '../middleware/auth';
+import { asyncHandler } from '../lib/utils';
+import { uploadAvatar } from '../middleware/upload';
 
 const router = express.Router();
 
-// Helper to wrap async route handlers
-const asyncHandler = (fn: any) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-};
-
-// --- Public Routes ---
 // Search for users
 router.get('/search/users', auth, asyncHandler(userController.searchUsers));
 
-// --- Authenticated Routes ---
 // Get your own detailed profile
 router.get('/me/profile', auth, asyncHandler(userController.getMe));
 
@@ -30,7 +25,6 @@ router.put('/me/profile', auth, asyncHandler(userController.updateProfile));
 // Update your avatar
 router.put('/me/avatar', auth, uploadAvatar, asyncHandler(userController.updateAvatar));
 
-// --- User specific routes (by username or ID) ---
 // Get a user's profile by username (must be after /me and /search routes)
 router.get('/:username', auth, asyncHandler(userController.getProfile));
 

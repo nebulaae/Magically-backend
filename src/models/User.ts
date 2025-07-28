@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import db from '../config/database';
-import type { Publication } from './Publication';
 import type { Comment } from './Comment';
+import type { Publication } from './Publication';
 import {
     Model,
     DataTypes,
@@ -21,6 +21,11 @@ export interface UserAttributes {
     password?: string;
     avatar?: string;
     interests?: string[];
+    tokens: number;
+    dailyActions: {
+        count: number;
+        lastReset: Date;
+    };
     verified: boolean;
     otp?: string;
     otpExpires?: Date;
@@ -28,13 +33,6 @@ export interface UserAttributes {
     passwordResetTokenExpires?: Date;
     createdAt?: Date;
     updatedAt?: Date;
-    gallery?: Array<{
-        originalPath: string;
-        generatedUrl: string;
-        prompt: string;
-        style: string;
-        createdAt: Date;
-    }>;
 }
 
 // --- User Model Class ---
@@ -47,6 +45,11 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public password!: string;
     public avatar?: string;
     public interests?: string[];
+    public tokens!: number;
+    public dailyActions!: {
+        count: number;
+        lastReset: Date;
+    };
     public verified!: boolean;
     public otp?: string;
     public otpExpires?: Date;
@@ -80,15 +83,6 @@ export class User extends Model<UserAttributes> implements UserAttributes {
     public getLikedComments!: BelongsToManyGetAssociationsMixin<Comment>;
     public addLikedComment!: BelongsToManyAddAssociationMixin<Comment, string>;
     public removeLikedComment!: BelongsToManyRemoveAssociationMixin<Comment, string>;
-
-    // Gallery
-    public gallery?: Array<{
-        originalPath: string;
-        generatedUrl: string;
-        prompt: string;
-        style: string;
-        createdAt: Date;
-    }>;
 }
 
 // --- Initialize User Model ---
@@ -131,6 +125,16 @@ User.init(
             allowNull: true,
             defaultValue: [],
         },
+        tokens: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 500,
+        },
+        dailyActions: {
+            type: DataTypes.JSONB,
+            allowNull: false,
+            defaultValue: { count: 0, lastReset: new Date() },
+        },
         verified: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
@@ -151,12 +155,7 @@ User.init(
         passwordResetTokenExpires: {
             type: DataTypes.DATE,
             allowNull: true,
-        },
-        gallery: {
-            type: DataTypes.JSONB,
-            allowNull: true,
-            defaultValue: [],
-        },
+        }
     },
     {
         sequelize: db,

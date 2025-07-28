@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+
 import { Request } from 'express';
 
 // Define the destination directory for avatars
@@ -92,3 +93,25 @@ export const uploadPrivateImage = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: fileFilter // You can reuse the existing image fileFilter
 }).single('privateImage');
+
+// --- New: Configure multer for temporary public image uploads for AI generation ---
+const tempDir = path.join(__dirname, '../../public/temp');
+if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+}
+
+export const uploadTempImage = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, tempDir);
+        },
+        filename: (req, file, cb) => {
+            const userId = req.user.id;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const extension = path.extname(file.originalname);
+            cb(null, `temp-${userId}-${uniqueSuffix}${extension}`);
+        }
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: fileFilter // Reuse the existing image fileFilter
+}).single('image');

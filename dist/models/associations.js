@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupAssociations = void 0;
 const User_1 = require("./User");
 const Comment_1 = require("./Comment");
+const Gallery_1 = require("./Gallery");
 const Publication_1 = require("./Publication");
 const Subscription_1 = require("./Subscription");
 const LikedComment_1 = require("./LikedComment");
@@ -44,7 +45,6 @@ const setupAssociations = () => {
         foreignKey: 'publicationId',
         otherKey: 'userId',
     });
-    // --- NEW: Comment Associations ---
     // User -> Comment (One-to-Many)
     User_1.User.hasMany(Comment_1.Comment, {
         foreignKey: 'userId',
@@ -87,6 +87,16 @@ const setupAssociations = () => {
         through: LikedComment_1.LikedComment,
         foreignKey: 'commentId',
         otherKey: 'userId',
+    });
+    // User -> Gallery (One-to-Many)
+    User_1.User.hasMany(Gallery_1.Gallery, {
+        foreignKey: 'userId',
+        as: 'galleryItems',
+        onDelete: 'CASCADE'
+    });
+    Gallery_1.Gallery.belongsTo(User_1.User, {
+        foreignKey: 'userId',
+        as: 'user',
     });
     console.log('Database associations have been set up.');
 };

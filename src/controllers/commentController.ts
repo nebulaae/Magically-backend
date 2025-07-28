@@ -1,15 +1,19 @@
 import db from '../config/database';
+
 import { User } from '../models/User';
-import { Request, Response } from 'express';
 import { Comment } from '../models/Comment';
+import { Request, Response } from 'express';
 import { Publication } from '../models/Publication';
+import { fetchReplies, handleUserAction } from '../lib/utils';
 
 // --- Create a Comment ---
 export const createComment = async (req: Request, res: Response) => {
     try {
         const { publicationId } = req.params;
         const { text } = req.body;
+
         const userId = req.user.id;
+        const me = await User.findByPk(userId);
 
         if (!text) {
             return res.status(400).json({ message: 'Comment text cannot be empty.' });
@@ -29,8 +33,8 @@ export const createComment = async (req: Request, res: Response) => {
             }, { transaction: t });
 
             await publication.increment('commentCount', { transaction: t });
+            await handleUserAction(me, 20, t);
         });
-
 
         res.status(201).json(comment);
     } catch (error) {
@@ -68,7 +72,7 @@ export const replyToComment = async (req: Request, res: Response) => {
                 userId,
                 publicationId: parentComment.publicationId,
                 text,
-                parentId: commentId, // Link to the parent comment
+                parentId: commentId,
             }, { transaction: t });
 
             await publication.increment('commentCount', { transaction: t });
@@ -80,20 +84,6 @@ export const replyToComment = async (req: Request, res: Response) => {
         console.error('Reply to comment error:', error);
         res.status(500).json({ message: 'Server error while replying to comment.' });
     }
-};
-
-// Helper function to recursively fetch replies
-const fetchReplies = async (comment: Comment) => {
-    const replies = await Comment.findAll({
-        where: { parentId: comment.id },
-        include: [{ model: User, as: 'author', attributes: ['id', 'username', 'fullname', 'avatar'] }],
-        order: [['createdAt', 'ASC']]
-    });
-
-    for (const reply of replies) {
-        (reply as any).dataValues.replies = await fetchReplies(reply);
-    }
-    return replies;
 };
 
 // --- Get Comments for a Publication ---
@@ -207,7 +197,6 @@ export const likeComment = async (req: Request, res: Response) => {
             await comment.increment('likeCount', { transaction: t });
         });
 
-
         res.status(200).json({ message: 'Comment liked successfully.' });
     } catch (error) {
         console.error('Like comment error:', error);
@@ -243,7 +232,6 @@ export const unlikeComment = async (req: Request, res: Response) => {
                 await comment.decrement('likeCount', { transaction: t });
             }
         });
-
 
         res.status(200).json({ message: 'Comment unliked successfully.' });
     } catch (error) {

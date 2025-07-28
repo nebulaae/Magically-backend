@@ -116,55 +116,6 @@ export const registerStep3 = async (req: Request, res: Response) => {
     }
 };
 
-// --- Register New User ---
-export const register = async (req: Request, res: Response) => {
-    try {
-        const { fullname, username, email, password, bio } = req.body;
-
-        const existingUser = await User.findOne({
-            where: {
-                [Op.or]: [{ username }, { email }]
-            }
-        });
-
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username or email already exists' });
-        }
-
-        const user = await User.create({
-            fullname,
-            username,
-            email,
-            bio,
-            password // Password will be hashed by the beforeCreate hook
-        });
-
-        // Generate JWT token
-        const token = generateToken(user.id);
-
-        // Set cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-        });
-
-        // Exclude password from the response
-        const { password: _, ...userResponse } = user.get({ plain: true });
-
-        return res.status(201).json({
-            token,
-            user: userResponse
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        if (error instanceof Error && error.name === 'SequelizeValidationError') {
-            return res.status(400).json({ message: 'Validation failed', errors: (error as any).errors });
-        }
-        return res.status(500).json({ message: 'Server error during registration' });
-    }
-};
-
 // --- Login User ---
 export const login = async (req: Request, res: Response) => {
     try {

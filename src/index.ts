@@ -9,17 +9,12 @@ import db from './config/database';
 // Import model associations setup
 import { setupAssociations } from './models/associations';
 
-// import classifiers
-import {
-  initImageClassifier,
-  initTextClassifier
-} from './services/classificationService';
-
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
+import galleryRoutes from './routes/gallery';
+import commentRoutes from './routes/comment';
 import publicationRoutes from './routes/publication';
-import generationRoutes from './routes/generation';
 
 dotenv.config()
 
@@ -40,29 +35,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Serve static files from the 'public' directory
-// This is crucial for making avatars and publication images accessible via URL
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/publications', publicationRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/ai', generationRoutes);
-
-// Health check route
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
-});
+app.use('/api/gallery', galleryRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/publications', publicationRoutes);
 
 // Initialize database and start server
 const startServer = async () => {
   try {
     // Setup model associations
     setupAssociations();
-
-    // Init classifiers
-    initTextClassifier();
-    initImageClassifier();
 
     await db.sync({ alter: true });
     console.log('Database synchronized');

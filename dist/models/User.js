@@ -55,6 +55,16 @@ User.init({
         allowNull: true,
         defaultValue: [],
     },
+    tokens: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 500,
+    },
+    dailyActions: {
+        type: sequelize_1.DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: { count: 0, lastReset: new Date() },
+    },
     verified: {
         type: sequelize_1.DataTypes.BOOLEAN,
         defaultValue: false,
@@ -75,12 +85,7 @@ User.init({
     passwordResetTokenExpires: {
         type: sequelize_1.DataTypes.DATE,
         allowNull: true,
-    },
-    gallery: {
-        type: sequelize_1.DataTypes.JSONB,
-        allowNull: true,
-        defaultValue: [],
-    },
+    }
 }, {
     sequelize: database_1.default,
     modelName: 'User',

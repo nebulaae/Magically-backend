@@ -14,7 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPassword = exports.forgotPassword = exports.getMe = exports.logout = exports.login = exports.register = exports.registerStep3 = exports.registerStep2 = exports.registerStep1 = void 0;
+exports.resetPassword = exports.forgotPassword = exports.getMe = exports.logout = exports.login = exports.registerStep3 = exports.registerStep2 = exports.registerStep1 = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const crypto_1 = __importDefault(require("crypto"));
 const sequelize_1 = require("sequelize");
@@ -117,49 +117,6 @@ const registerStep3 = async (req, res) => {
     }
 };
 exports.registerStep3 = registerStep3;
-// --- Register New User ---
-const register = async (req, res) => {
-    try {
-        const { fullname, username, email, password, bio } = req.body;
-        const existingUser = await User_1.User.findOne({
-            where: {
-                [sequelize_1.Op.or]: [{ username }, { email }]
-            }
-        });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username or email already exists' });
-        }
-        const user = await User_1.User.create({
-            fullname,
-            username,
-            email,
-            bio,
-            password // Password will be hashed by the beforeCreate hook
-        });
-        // Generate JWT token
-        const token = (0, authService_1.generateToken)(user.id);
-        // Set cookie
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
-        });
-        // Exclude password from the response
-        const _a = user.get({ plain: true }), { password: _ } = _a, userResponse = __rest(_a, ["password"]);
-        return res.status(201).json({
-            token,
-            user: userResponse
-        });
-    }
-    catch (error) {
-        console.error('Registration error:', error);
-        if (error instanceof Error && error.name === 'SequelizeValidationError') {
-            return res.status(400).json({ message: 'Validation failed', errors: error.errors });
-        }
-        return res.status(500).json({ message: 'Server error during registration' });
-    }
-};
-exports.register = register;
 // --- Login User ---
 const login = async (req, res) => {
     try {

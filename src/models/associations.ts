@@ -1,5 +1,6 @@
 import { User } from './User';
 import { Comment } from './Comment';
+import { Gallery } from './Gallery';
 import { Publication } from './Publication';
 import { Subscription } from './Subscription';
 import { LikedComment } from './LikedComment';
@@ -44,8 +45,6 @@ export const setupAssociations = () => {
         foreignKey: 'publicationId',
         otherKey: 'userId',
     });
-
-    // --- NEW: Comment Associations ---
 
     // User -> Comment (One-to-Many)
     User.hasMany(Comment, {
@@ -94,6 +93,16 @@ export const setupAssociations = () => {
         otherKey: 'userId',
     });
 
+    // User -> Gallery (One-to-Many)
+    User.hasMany(Gallery, {
+        foreignKey: 'userId',
+        as: 'galleryItems',
+        onDelete: 'CASCADE'
+    });
+    Gallery.belongsTo(User, {
+        foreignKey: 'userId',
+        as: 'user',
+    });
 
     console.log('Database associations have been set up.');
 };

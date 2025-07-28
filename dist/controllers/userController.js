@@ -17,8 +17,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getFollowing = exports.getFollowers = exports.unsubscribe = exports.subscribe = exports.searchUsers = exports.updateAvatar = exports.updateProfile = exports.getMyFollowings = exports.getMyFollowers = exports.getMe = exports.getProfile = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const database_1 = __importDefault(require("../config/database"));
 const sequelize_1 = require("sequelize");
 const User_1 = require("../models/User");
+const utils_1 = require("../lib/utils");
 const Subscription_1 = require("../models/Subscription");
 const LikedPublication_1 = require("../models/LikedPublication");
 // Helper function from publicationController - assuming it's exported or moved to a shared service
@@ -265,6 +267,9 @@ const subscribe = async (req, res) => {
         }
         const me = await User_1.User.findByPk(followerId);
         await me.addFollowing(userToFollow);
+        await database_1.default.transaction(async (t) => {
+            await (0, utils_1.handleUserAction)(me, 10, t);
+        });
         res.status(200).json({ message: `Successfully followed ${userToFollow.username}` });
     }
     catch (error) {

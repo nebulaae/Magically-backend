@@ -7,14 +7,17 @@ exports.verifyToken = exports.generateToken = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 dotenv_1.default.config();
-const JWT_SECRET = process.env.JWT_SECRET;
+// Configs
 const JWT_EXPIRES_IN = '365d';
+const JWT_SECRET = process.env.JWT_SECRET;
+// Generate token
 const generateToken = (userId) => {
     return jsonwebtoken_1.default.sign({ id: userId }, JWT_SECRET, {
         expiresIn: JWT_EXPIRES_IN,
     });
 };
 exports.generateToken = generateToken;
+// Verify token
 const verifyToken = (token) => {
     try {
         return jsonwebtoken_1.default.verify(token, JWT_SECRET);

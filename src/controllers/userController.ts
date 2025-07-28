@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import db from '../config/database';
 
 import { Op } from 'sequelize';
 import { User } from '../models/User';
 import { Request, Response } from 'express';
+import { handleUserAction } from '../lib/utils';
 import { Publication } from '../models/Publication';
 import { Subscription } from '../models/Subscription';
 import { LikedPublication } from '../models/LikedPublication';
@@ -302,6 +304,10 @@ export const subscribe = async (req: Request, res: Response) => {
 
         const me = await User.findByPk(followerId);
         await me.addFollowing(userToFollow);
+
+        await db.transaction(async (t) => {
+            await handleUserAction(me, 10, t);
+        })
 
         res.status(200).json({ message: `Successfully followed ${userToFollow.username}` });
     } catch (error) {
