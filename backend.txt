@@ -2,18 +2,18 @@ Stack: Node js, Express js, PostgreSQL, Sequelize ORM, Typescript
 Project folder structure:
 /src
  -config - database.ts
- -controllers - authController.ts, userController.ts, publicationController.ts, commentController.ts, galleryController.ts
+ -controllers - authController.ts, userController.ts, publicationController.ts, commentController.ts, galleryController.ts, higgsfieldController.ts, klingController.ts
  -lib - utils.ts
  -middleware - auth.ts, upload.ts
  -models - associations.ts, User.ts, Publications.ts, Subscriptions.ts, LikedPublication.ts, Comment.ts, LikedComment.ts, Gallery.ts
- -routes - auth.ts, user.ts, publication.ts, gallery.ts, comment.ts
- -services - authService.ts, emailService.ts, passwordService.ts
+ -routes - auth.ts, user.ts, publication.ts, gallery.ts, comment.ts, higgsfield.ts, kling.ts
+ -services - authService.ts, emailService.ts, passwordService.ts, higgsfieldService.ts, klingService.ts
  -index.ts
 /public
 /private
 .env
 
-config
+-----------------------------------------------------------------------------------config
 import dotenv from 'dotenv'; 
 import { Sequelize } from 'sequelize';
 
@@ -37,7 +37,7 @@ try {
 
 export default db;
 
-lib
+-----------------------------------------------------------------------------------lib
 import express from "express";
 
 import { User } from "../models/User";
@@ -80,8 +80,8 @@ export const fetchReplies = async (comment: Comment) => {
 };
 
 
-middleware
-auth
+-----------------------------------------------------------------------------------middleware
+-----------------------------------------------------------------------------------auth
 import { User } from '../models/User';
 import { verifyToken } from '../services/authService';
 import { Request, Response, NextFunction } from 'express';
@@ -124,7 +124,7 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
     }
 };
 
-upload
+-----------------------------------------------------------------------------------Upload
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
@@ -173,7 +173,25 @@ export const uploadAvatar = multer({
     fileFilter: fileFilter
 }).single('avatar'); // 'avatar' is the name of the form field
 
-// Upload publication image
+// Helper function to upload media
+const imageAndVideoFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    const allowedImageTypes = /jpeg|jpg|png|gif/;
+    const allowedVideoTypes = /mp4|mov|avi|webm|mkv/;
+    const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+    const mimetype = file.mimetype;
+
+    if (
+        allowedImageTypes.test(ext) ||
+        allowedVideoTypes.test(ext) ||
+        mimetype.startsWith('image/') ||
+        mimetype.startsWith('video/')
+    ) {
+        return cb(null, true);
+    }
+    cb(new Error('Error: File upload only supports image and video filetypes - jpeg, jpg, png, gif, mp4, mov, avi, webm, mkv'));
+};
+
+// Обновленный uploadPublicationImage
 export const uploadPublicationImage = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
@@ -188,15 +206,9 @@ export const uploadPublicationImage = multer({
             cb(null, `${userId}-${uniqueSuffix}${extension}`);
         }
     }),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
-    fileFilter: (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-        const allowedTypes = /jpeg|jpg|png|gif/;
-        const mimetype = allowedTypes.test(file.mimetype);
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        if (mimetype && extname) { return cb(null, true); }
-        cb(new Error('Error: File upload only supports image filetypes - ' + allowedTypes));
-    }
-}).single('publicationImage'); // 'publicationImage' is the name of the form field
+    limits: { fileSize: 200 * 1024 * 1024 }, // 200MB limit для видео
+    fileFilter: imageAndVideoFileFilter
+}).single('publicationMedia'); // Можно переименовать поле, если хотите
 
 
 const privateDir = path.join(__dirname, '../../private/user_uploads');
@@ -217,13 +229,13 @@ export const uploadPrivateImage = multer({
             cb(null, `private-${userId}-${uniqueSuffix}${extension}`);
         }
     }),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: fileFilter // You can reuse the existing image fileFilter
-}).single('privateImage');
+    limits: { fileSize: 200 * 1024 * 1024 }, // 200MB limit
+    fileFilter: imageAndVideoFileFilter // You can reuse the existing image fileFilter
+}).single('privateMedia');
 
 
 
-services
+-----------------------------------------------------------------------------------services
 auth
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
@@ -250,7 +262,7 @@ export const verifyToken = (token: string): { id: string } | null => {
   }
 };
 
-email
+-----------------------------------------------------------------------------------email
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 
@@ -340,7 +352,7 @@ export const sendPasswordResetEmail = async (to: string, token: string) => {
     }
 };
 
-password
+-----------------------------------------------------------------------------------password
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 
@@ -370,9 +382,87 @@ export const handleForgotPassword = async (email: string) => {
     await sendPasswordResetEmail(user.email, resetToken);
 };
 
+-----------------------------------------------------------------------------------higgsfield
+import axios from 'axios';
+import path from 'path';
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
-models
-User
+const HIGGSFIELD_API_URL = 'https://api.unifically.com/higgsfield';
+const HIGGSFIELD_API_KEY = process.env.HIGGSFIELD_API;
+
+// --- THIS IS THE CHANGE ---
+// The function now accepts imageUrls and sends a JSON payload.
+export const generateVideo = async (apiPayload: any, imageUrls: string[]) => {
+    // Combine the API payload with the image URLs
+    const requestBody = {
+        ...apiPayload,
+        image: imageUrls, // Add the array of public image URLs
+        model: "standard" // Add model, as seen in the docs
+    };
+
+    try {
+        const response = await axios.post(`${HIGGSFIELD_API_URL}/generate`, requestBody, {
+            headers: {
+                'Content-Type': 'application/json', // Set the correct header for a JSON request
+                'Authorization': `Bearer ${HIGGSFIELD_API_KEY}`,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        // The error log will now show the exact JSON body that was rejected
+        console.error('Error generating video:', error.response?.data || error.message);
+        throw new Error('Failed to start video generation.');
+    }
+};
+// --- END OF CHANGE ---
+
+
+// The other functions remain the same.
+export const getVideo = async (taskId: string) => {
+    try {
+        const response = await axios.get(`${HIGGSFIELD_API_URL}/feed/${taskId}`, {
+            headers: {
+                'Authorization': `Bearer ${HIGGSFIELD_API_KEY}`,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting video status:', error.response?.data || error.message);
+        throw new Error('Failed to get video generation status.');
+    }
+};
+
+export const downloadVideo = async (videoUrl: string): Promise<string> => {
+    const videoDir = path.join(__dirname, '../../public/videos');
+    if (!fs.existsSync(videoDir)) {
+        fs.mkdirSync(videoDir, { recursive: true });
+    }
+    const filename = `${uuidv4()}.mp4`;
+    const outputPath = path.join(videoDir, filename);
+
+    try {
+        const response = await axios({
+            method: 'GET',
+            url: videoUrl,
+            responseType: 'stream',
+        });
+
+        const writer = fs.createWriteStream(outputPath);
+        response.data.pipe(writer);
+
+        return new Promise((resolve, reject) => {
+            writer.on('finish', () => resolve(`/videos/${filename}`));
+            writer.on('error', reject);
+        });
+    } catch (error) {
+        console.error('Error downloading video:', error);
+        throw new Error('Failed to download video.');
+    }
+};
+
+-----------------------------------------------------------------------------------models
+-----------------------------------------------------------------------------------User
 import bcrypt from 'bcrypt';
 import db from '../config/database';
 import type { Comment } from './Comment';
@@ -553,7 +643,7 @@ User.init(
     }
 );
 
-Publication
+-----------------------------------------------------------------------------------Publication
 import db from '../config/database';
 import type { User } from './User';
 import type { Comment } from './Comment';
@@ -572,6 +662,7 @@ export interface PublicationAttributes {
     userId: string;
     content: string;
     imageUrl?: string;
+    videoUrl?: string; // [NEW] For video content
     category?: string;
     likeCount: number;
     commentCount: number;
@@ -585,6 +676,7 @@ export class Publication extends Model<PublicationAttributes> implements Publica
     public userId!: string;
     public content!: string;
     public imageUrl?: string;
+    public videoUrl?: string; // [NEW]
     public category?: string;
     public likeCount!: number;
     public commentCount!: number;
@@ -622,6 +714,10 @@ Publication.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
+        videoUrl: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
         category: {
             type: DataTypes.STRING,
             allowNull: true,
@@ -644,7 +740,7 @@ Publication.init(
     }
 );
 
-Subscriptions
+-----------------------------------------------------------------------------------Subscriptions
 import db from '../config/database';
 
 import { DataTypes, Model } from 'sequelize';
@@ -690,7 +786,7 @@ Subscription.init(
 );
 
 
-LikedComment and LikedPublication
+-----------------------------------------------------------------------------------LikedComment and LikedPublication
 import db from '../config/database';
 import { DataTypes, Model } from 'sequelize';
 
@@ -770,7 +866,7 @@ LikedPublication.init(
     }
 );
 
-Gallery
+-----------------------------------------------------------------------------------Gallery
 import db from '../config/database';
 import { Model, DataTypes, BelongsToGetAssociationMixin } from 'sequelize';
 import type { User } from './User';
@@ -838,7 +934,7 @@ Gallery.init(
     }
 );
 
-Comments
+-----------------------------------------------------------------------------------Comments
 import db from '../config/database';
 import {
     Model,
@@ -940,7 +1036,7 @@ Comment.init(
     }
 );
 
-associations
+-----------------------------------------------------------------------------------associations
 import { User } from './User';
 import { Comment } from './Comment';
 import { Gallery } from './Gallery';
@@ -1050,8 +1146,8 @@ export const setupAssociations = () => {
     console.log('Database associations have been set up.');
 };
 
-controllers
-auth
+-----------------------------------------------------------------------------------controllers
+-----------------------------------------------------------------------------------auth
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 
@@ -1301,7 +1397,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
 };
 
-comment
+-----------------------------------------------------------------------------------comment
 import db from '../config/database';
 
 import { User } from '../models/User';
@@ -1547,7 +1643,7 @@ export const unlikeComment = async (req: Request, res: Response) => {
     }
 };
 
-gallery
+-----------------------------------------------------------------------------------gallery
 import { Gallery } from '../models/Gallery';
 import { Request, Response } from 'express';
 
@@ -1572,7 +1668,7 @@ export const getMyGallery = async (req: Request, res: Response) => {
     }
 };
 
-publication
+-----------------------------------------------------------------------------------publication
 import db from '../config/database';
 
 import { Op } from 'sequelize';
@@ -1820,7 +1916,7 @@ export const getMyLikedPublications = async (req: Request, res: Response) => {
     }
 };
 
-user
+-----------------------------------------------------------------------------------user
 import fs from 'fs';
 import path from 'path';
 
@@ -2210,8 +2306,115 @@ export const getFollowing = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 }
+-----------------------------------------------------------------------------------higgsfield
+import { Request, Response } from 'express';
+import { generateVideo, getVideo, downloadVideo } from '../services/higgsfieldService';
+import { Publication } from '../models/Publication';
+import { Gallery } from '../models/Gallery';
+import fs from 'fs';
 
-routes
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export const generateAndProcessVideo = async (req: Request, res: Response) => {
+    const {
+        publish,
+        enhance_prompt,
+        seed,
+        width,
+        height,
+        motion_id,
+        prompt
+    } = req.body;
+
+    const userId = req.user.id;
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+        return res.status(400).json({ message: 'At least one image is required.' });
+    }
+
+    try {
+        // --- THIS IS THE CHANGE ---
+        // Construct the public URLs for the uploaded files
+        const imageUrls = files.map(file => {
+            // The URL path will be /ai_uploads/filename.ext
+            const filePath = `/ai_uploads/${file.filename}`;
+            return `${process.env.BACKEND_URL}${filePath}`;
+        });
+
+        const apiPayload = {
+            motion_id,
+            prompt,
+            enhance_prompt: enhance_prompt === 'true',
+            seed: parseInt(seed, 10),
+            width: parseInt(width, 10),
+            height: parseInt(height, 10)
+        };
+
+        // Pass the payload and the array of public image URLs to the service
+        const generationResponse = await generateVideo(apiPayload, imageUrls);
+        // --- END OF CHANGE ---
+
+        // After successfully sending the request, delete the temporary public files
+        files.forEach(file => fs.unlinkSync(file.path));
+
+        const taskId = generationResponse.id;
+
+        if (!taskId) {
+            return res.status(500).json({ message: 'Failed to get a task ID from Higgsfield.' });
+        }
+
+        // The rest of the function remains the same...
+        let videoResult;
+        let attempts = 0;
+        const maxAttempts = 60;
+
+        while (attempts < maxAttempts) {
+            await sleep(5000);
+            const statusResponse = await getVideo(taskId);
+
+            if (statusResponse.jobs && statusResponse.jobs[0]) {
+                const job = statusResponse.jobs[0];
+                if (job.status === 'completed') {
+                    videoResult = job.result.url;
+                    break;
+                } else if (job.status === 'failed') {
+                    return res.status(500).json({ message: 'Video generation failed.' });
+                }
+            }
+            attempts++;
+        }
+
+        if (!videoResult) {
+            return res.status(500).json({ message: 'Video generation timed out.' });
+        }
+
+        const downloadedVideoPath = await downloadVideo(videoResult);
+
+        if (publish === 'true') {
+            const publication = await Publication.create({
+                userId,
+                content: prompt || 'Generated Video',
+                videoUrl: downloadedVideoPath,
+            });
+            res.status(201).json({ message: 'Video published successfully.', publication });
+        } else {
+            const galleryItem = await Gallery.create({
+                userId,
+                prompt: prompt || 'Generated Video',
+                imageUrl: downloadedVideoPath,
+                generationType: 'video',
+            });
+            res.status(201).json({ message: 'Video saved to your private gallery.', galleryItem });
+        }
+    } catch (error) {
+        console.error('Higgsfield video generation process error:', error);
+        res.status(500).json({ message: 'An error occurred during the video generation process.' });
+    }
+};
+
+-----------------------------------------------------------------------------------routes
+-----------------------------------------------------------------------------------auth
 import express from 'express';
 import * as authController from '../controllers/authController';
 
@@ -2241,7 +2444,7 @@ router.post('/reset-password/:token', asyncHandler(authController.resetPassword)
 
 export default router;
 
-comment
+-----------------------------------------------------------------------------------comment
 import express from "express";
 import * as commentController from '../controllers/commentController';
 
@@ -2273,7 +2476,7 @@ router.delete('/:commentId/unlike', auth, asyncHandler(commentController.unlikeC
 
 export default router;
 
-publication
+-----------------------------------------------------------------------------------publication
 import express from "express";
 import * as publicationController from '../controllers/publicationController';
 
@@ -2306,7 +2509,7 @@ router.delete('/:publicationId/unlike', auth, asyncHandler(publicationController
 
 export default router;
 
-user
+-----------------------------------------------------------------------------------user
 import express from 'express';
 import * as userController from '../controllers/userController';
 
@@ -2351,7 +2554,25 @@ router.delete('/:userId/unsubscribe', auth, asyncHandler(userController.unsubscr
 
 export default router;
 
-index
+-----------------------------------------------------------------------------------higgsfield
+import express from 'express';
+import * as higgsfieldController from '../controllers/higgsfieldController';
+import { auth } from '../middleware/auth';
+import { asyncHandler } from '../lib/utils';
+import { uploadPrivateImages } from '../middleware/upload';
+
+const router = express.Router();
+
+router.post(
+    '/generate',
+    auth,
+    uploadPrivateImages,
+    asyncHandler(higgsfieldController.generateAndProcessVideo)
+);
+
+export default router;
+
+-----------------------------------------------------------------------------------index
 import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -2368,6 +2589,7 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import galleryRoutes from './routes/gallery';
 import commentRoutes from './routes/comment';
+import higgsfieldRoutes from './routes/higgsfield';
 import publicationRoutes from './routes/publication';
 
 dotenv.config()
@@ -2396,6 +2618,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/higgsfield', higgsfieldRoutes);
 app.use('/api/publications', publicationRoutes);
 
 // Initialize database and start server

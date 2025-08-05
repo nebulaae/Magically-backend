@@ -14,8 +14,10 @@ const associations_1 = require("./models/associations");
 // Import routes
 const auth_1 = __importDefault(require("./routes/auth"));
 const user_1 = __importDefault(require("./routes/user"));
+const kling_1 = __importDefault(require("./routes/kling"));
 const gallery_1 = __importDefault(require("./routes/gallery"));
 const comment_1 = __importDefault(require("./routes/comment"));
+const higgsfield_1 = __importDefault(require("./routes/higgsfield"));
 const publication_1 = __importDefault(require("./routes/publication"));
 dotenv_1.default.config();
 // Initialize express app
@@ -34,8 +36,10 @@ app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 // Routes
 app.use('/api/auth', auth_1.default);
 app.use('/api/users', user_1.default);
+app.use('/api/kling', kling_1.default);
 app.use('/api/gallery', gallery_1.default);
 app.use('/api/comments', comment_1.default);
+app.use('/api/higgsfield', higgsfield_1.default);
 app.use('/api/publications', publication_1.default);
 // Initialize database and start server
 const startServer = async () => {

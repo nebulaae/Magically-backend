@@ -68,7 +68,7 @@ Publication.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
-        videoUrl: { // [NEW]
+        videoUrl: {
             type: DataTypes.STRING,
             allowNull: true,
         },

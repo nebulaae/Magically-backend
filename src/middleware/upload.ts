@@ -1,29 +1,19 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-
 import { Request } from 'express';
 
-// Define the destination directory for avatars
+// Define the destinations for directories
+const klingDir = path.join(__dirname, '../../public/ai/kling');
 const avatarDir = path.join(__dirname, '../../public/users/avatars');
+const privateDir = path.join(__dirname, '../../private/user_uploads');
+const higgsfieldDir = path.join(__dirname, '../../public/ai/higgsfield');
+const publicationDir = path.join(__dirname, '../../public/publications');
 
-// Ensure the directory exists
-if (!fs.existsSync(avatarDir)) {
-    fs.mkdirSync(avatarDir, { recursive: true });
-}
-
-// Configure multer storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, avatarDir);
-    },
-    filename: (req: Request, file, cb) => {
-        // Create a unique filename to prevent overwrites
-        // format: userId-timestamp.extension
-        const userId = req.user.id;
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = path.extname(file.originalname);
-        cb(null, `${userId}-${uniqueSuffix}${extension}`);
+// Ensure directories exist
+[klingDir, avatarDir, privateDir, higgsfieldDir, publicationDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
 });
 
@@ -39,19 +29,45 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
     cb(new Error('Error: File upload only supports the following filetypes - ' + allowedTypes));
 };
 
-// Initialize multer with the storage and file filter configurations
-export const uploadAvatar = multer({
-    storage: storage,
-    limits: { fileSize: 2 * 1024 * 1024 }, // Limit file size to 2MB
-    fileFilter: fileFilter
-}).single('avatar'); // 'avatar' is the name of the form field
+// File filter to accept both image and video files
+const imageAndVideoFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    const allowedImageTypes = /jpeg|jpg|png|gif/;
+    const allowedVideoTypes = /mp4|mov|avi|webm|mkv/;
+    const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+    const mimetype = file.mimetype;
 
-// Upload publication image
+    if (
+        allowedImageTypes.test(ext) ||
+        allowedVideoTypes.test(ext) ||
+        mimetype.startsWith('image/') ||
+        mimetype.startsWith('video/')
+    ) {
+        return cb(null, true);
+    }
+    cb(new Error('Error: File upload only supports image and video filetypes - jpeg, jpg, png, gif, mp4, mov, avi, webm, mkv'));
+};
+
+// Avatar upload storage
+export const uploadAvatar = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, avatarDir);
+        },
+        filename: (req: Request, file, cb) => {
+            const userId = req.user.id;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const extension = path.extname(file.originalname);
+            cb(null, `${userId}-${uniqueSuffix}${extension}`);
+        },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+    fileFilter: fileFilter
+}).single('avatar');
+
+// Storage to upload publications
 export const uploadPublicationImage = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
-            const publicationDir = path.join(__dirname, '../../public/publications');
-            if (!fs.existsSync(publicationDir)) { fs.mkdirSync(publicationDir, { recursive: true }); }
             cb(null, publicationDir);
         },
         filename: (req: Request, file, cb) => {
@@ -61,57 +77,40 @@ export const uploadPublicationImage = multer({
             cb(null, `${userId}-${uniqueSuffix}${extension}`);
         }
     }),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
-    fileFilter: (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-        const allowedTypes = /jpeg|jpg|png|gif/;
-        const mimetype = allowedTypes.test(file.mimetype);
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        if (mimetype && extname) { return cb(null, true); }
-        cb(new Error('Error: File upload only supports image filetypes - ' + allowedTypes));
-    }
-}).single('publicationImage'); // 'publicationImage' is the name of the form field
+    limits: { fileSize: 200 * 1024 * 1024 }, // 200MB limit
+    fileFilter: imageAndVideoFileFilter
+}).single('publicationMedia');
 
-
-const privateDir = path.join(__dirname, '../../private/user_uploads');
-if (!fs.existsSync(privateDir)) {
-    fs.mkdirSync(privateDir, { recursive: true });
-}
-
-// --- New: Configure multer for private image uploads for AI generation ---
-export const uploadPrivateImage = multer({
+// Storage to upload image to kling
+export const uploadKlingImage = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
-            cb(null, privateDir);
+            cb(null, klingDir);
         },
         filename: (req, file, cb) => {
             const userId = req.user.id;
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
             const extension = path.extname(file.originalname);
-            cb(null, `private-${userId}-${uniqueSuffix}${extension}`);
+            cb(null, `kling-${userId}-${uniqueSuffix}${extension}`);
         }
     }),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: fileFilter // You can reuse the existing image fileFilter
-}).single('privateImage');
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+    fileFilter: fileFilter
+}).single('klingImage');
 
-// --- New: Configure multer for temporary public image uploads for AI generation ---
-const tempDir = path.join(__dirname, '../../public/temp');
-if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-}
-
-export const uploadTempImage = multer({
+// Storage to upload images to higgsfield
+export const uploadHiggsfieldImage = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
-            cb(null, tempDir);
+            cb(null, higgsfieldDir);
         },
         filename: (req, file, cb) => {
             const userId = req.user.id;
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
             const extension = path.extname(file.originalname);
-            cb(null, `temp-${userId}-${uniqueSuffix}${extension}`);
+            cb(null, `higgsfield-${userId}-${uniqueSuffix}${extension}`);
         }
     }),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: fileFilter // Reuse the existing image fileFilter
-}).single('image');
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+    fileFilter: fileFilter
+}).array('higgsfieldImage', 10);

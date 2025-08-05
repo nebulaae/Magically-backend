@@ -12,8 +12,10 @@ import { setupAssociations } from './models/associations';
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
+import klingRoutes from './routes/kling';
 import galleryRoutes from './routes/gallery';
 import commentRoutes from './routes/comment';
+import higgsfieldRoutes from './routes/higgsfield';
 import publicationRoutes from './routes/publication';
 
 dotenv.config()
@@ -40,8 +42,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/kling', klingRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/higgsfield', higgsfieldRoutes);
 app.use('/api/publications', publicationRoutes);
 
 // Initialize database and start server

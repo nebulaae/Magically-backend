@@ -1,6 +1,12 @@
-.env
-.idx
-.vscode
+/.idx/
+/.vscode/
 
-dist
-node_modules
+/dist
+/node_modules
+
+/private
+/public
+
+
+backend.txt
+.env
